@@ -1,73 +1,107 @@
-# .
+# Cipher Safe Frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+Vue 3 + TypeScript SPA for **Cipher Safe**. It talks to the Django backend
+(`cipher-safe-backend`) and lets a user manage private data: personal data,
+ID card images, PDF/DOC/XLS documents and videos, all encrypted with
+**AES, DES and RC4**.
 
-## Recommended IDE Setup
+## Features
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- **Sign up / sign in**: the backend issues JWT access + refresh tokens; the same
+  password is also the source of every encryption key.
+- **Personal data**: read/write GDPR / UU PDP fields; each save stores three
+  ciphertexts (AES, DES, RC4).
+- **Files**: upload an ID card image / document / video, choose the block
+  cipher mode, then download it back decrypted with any of the three
+  algorithms.
+- **Analysis**: per-algorithm timing tables (encryption + downloads), a
+  per-file benchmark, and download history.
 
-## Recommended Browser Setup
+## Architecture
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+```mermaid
+flowchart TD
+    Router["router<br/>routes + auth guards"]
+    Views["views<br/>Login, Register, PersonalData, Files, Analysis"]
+    Stores["Pinia stores<br/>auth, files"]
+    Composable["composables/useAsyncAction<br/>loading + error state"]
+    Endpoints["api/cipherSafe.ts<br/>typed endpoints"]
+    Client["api/client.ts<br/>fetch, credentials provider, error mapping"]
+    Backend[("Django backend<br/>/api")]
 
-## Type Support for `.vue` Imports in TS
+    Router --> Stores
+    Views --> Composable
+    Views --> Stores
+    Views --> Endpoints
+    Stores --> Endpoints
+    Endpoints --> Client
+    Client -->|"Authorization: Bearer<br/>X-Cipher-Password"| Backend
+```
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+## Security model
 
-## Customize configuration
+The password is needed on every crypto request, so it - along with the access and
+refresh tokens - is held **in memory only** in the Pinia auth store; nothing is
+written to `localStorage`/`sessionStorage`. Reloading the page therefore signs
+the user out. Requests carry:
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+- `Authorization: Bearer <access>`
+- `X-Cipher-Password: <password>`
 
-## Project Setup
+When the short-lived access token expires, the client refreshes it once with the
+stored refresh token and retries the request, so the user is not interrupted.
 
-```sh
+## Setup
+
+Requires Node `^22.18 || >=24.12` and the backend running on
+`http://127.0.0.1:8000`.
+
+```bash
 npm install
+npm run dev          # http://localhost:5173
 ```
 
-### Compile and Hot-Reload for Development
+During development, Vite proxies `/api` to the backend (see `vite.config.ts`),
+so no CORS configuration is needed. Override the target with `VITE_PROXY_TARGET`
+or point at a different backend for a build with `VITE_API_BASE`.
 
-```sh
-npm run dev
+```bash
+# .env (both optional)
+VITE_PROXY_TARGET=http://127.0.0.1:8000
+VITE_API_BASE=            # empty = use the dev proxy / same-origin /api
 ```
 
-### Type-Check, Compile and Minify for Production
+## Scripts
 
-```sh
-npm run build
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Dev server with hot reload + API proxy |
+| `npm run build` | Type-check and production build into `dist/` |
+| `npm run type-check` | `vue-tsc` only |
+| `npm run test:unit` | Vitest unit tests |
+| `npm run test:e2e` | Playwright smoke tests |
+| `npm run lint` | oxlint + ESLint (auto-fix) |
+| `npm run format` | Prettier |
+
+## Layout
+
+```
+src/
+  api/          fetch client + typed endpoint wrappers
+  assets/       global styles
+  composables/  useAsyncAction (loading/error wrapper)
+  router/       routes + auth guards
+  stores/       Pinia stores (auth, files)
+  types/        API types mirroring the DRF serializers
+  utils/        formatting + download helpers
+  views/        Login, Register, PersonalData, Files, Analysis
+  __tests__/    unit tests
+e2e/            Playwright tests
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+## Known issue
 
-```sh
-npm run test:unit
-```
-
-### Run End-to-End Tests with [Playwright](https://playwright.dev)
-
-```sh
-# Install browsers for the first run
-npx playwright install
-
-# When testing on CI, must build the project first
-npm run build
-
-# Runs the end-to-end tests
-npm run test:e2e
-# Runs the tests only on Chromium
-npm run test:e2e -- --project=chromium
-# Runs the tests of a specific file
-npm run test:e2e -- tests/example.spec.ts
-# Runs the tests in debug mode
-npm run test:e2e -- --debug
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-npm run lint
-```
+`npm audit` reports high-severity advisories in `braces` (via
+`@vue/eslint-config-typescript` -> `fast-glob` -> `micromatch`). `braces@3.0.3`
+is the latest release and has no patched version, and it is only used by the
+lint tooling; it is not part of the production bundle.
