@@ -17,7 +17,7 @@ const load = useAsyncAction(async () => {
   const data = await personalDataApi.get(algorithm.value)
   for (const field of PII_FIELDS) form[field.name] = data.fields[field.name] ?? ''
   hasStoredData.value = Object.keys(data.fields).length > 0
-}, 'Could not load personal data.')
+}, 'Could not load the patient profile.')
 
 const save = useAsyncAction(async () => {
   const fields: Record<string, string> = {}
@@ -26,8 +26,8 @@ const save = useAsyncAction(async () => {
   }
   await personalDataApi.update(fields)
   hasStoredData.value = true
-  message.value = 'Saved (encrypted with AES, DES and RC4).'
-}, 'Could not save personal data.')
+  message.value = 'Profile saved (encrypted with AES, DES and RC4).'
+}, 'Could not save the patient profile.')
 
 const error = computed(() => load.error.value || save.error.value)
 
@@ -38,10 +38,12 @@ onMounted(() => {
 
 <template>
   <div class="container">
-    <h1>Personal data</h1>
+    <h1>Patient profile</h1>
     <p class="muted">
-      These fields are GDPR / UU PDP personal data. Every save stores three separate ciphertexts
-      (AES, DES and RC4); nothing is kept in plaintext.
+      Identity and medical details a new clinic usually asks for. Fields marked
+      <span class="tag">health</span> are specific personal data under UU PDP Art. 4(2) and special-
+      category data under GDPR Art. 9. The whole profile is stored as three separate ciphertexts (AES,
+      DES and RC4) with an integrity tag; nothing is kept in plaintext. Saving replaces the profile.
     </p>
 
     <div class="card">
@@ -67,13 +69,15 @@ onMounted(() => {
     <form class="card" @submit.prevent="save.run()">
       <div class="grid">
         <div v-for="field in PII_FIELDS" :key="field.name">
-          <label :for="field.name">{{ field.label }}</label>
+          <label :for="field.name"
+            >{{ field.label }} <span v-if="field.health" class="tag">health</span></label
+          >
           <input :id="field.name" v-model="form[field.name]" :type="field.type ?? 'text'" />
         </div>
       </div>
       <p v-if="error" class="error">{{ error }}</p>
       <p v-if="message" class="success">{{ message }}</p>
-      <p v-if="!hasStoredData" class="muted">No personal data stored yet.</p>
+      <p v-if="!hasStoredData" class="muted">No profile stored yet.</p>
       <AsyncButton
         type="submit"
         :loading="save.loading.value"
@@ -92,6 +96,13 @@ onMounted(() => {
 .action {
   display: flex;
   align-items: flex-end;
+}
+
+.tag {
+  font-size: 0.75em;
+  padding: 0 0.35em;
+  border-radius: 4px;
+  background: var(--border);
 }
 
 .grid {

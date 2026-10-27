@@ -1,19 +1,23 @@
 # Cipher Safe Frontend
 
-Vue 3 + TypeScript SPA for **Cipher Safe**. It talks to the Django backend
-(`cipher-safe-backend`) and lets a user manage private data: personal data,
-ID card images, PDF/DOC/XLS documents and videos, all encrypted with
-**AES, DES and RC4**.
+Vue 3 + TypeScript SPA for **Cipher Safe**, a **patient-held medical records
+vault**. It talks to the Django backend (`cipher-safe-backend`) and lets a
+patient keep their own records between clinics and hospitals: a patient
+profile (identity + health details), KTP / BPJS card scans, medical documents
+(lab results, referral letters, medication logs) and medical videos
+(ultrasound, echo, endoscopy), all encrypted with **AES, DES and RC4** and
+integrity-checked with HMAC-SHA256.
 
 ## Features
 
 - **Sign up / sign in**: the backend issues JWT access + refresh tokens; the same
   password is also the source of every encryption key.
-- **Personal data**: read/write GDPR / UU PDP fields; each save stores three
+- **Patient profile**: read/write identity and health fields (health fields
+  are flagged as UU PDP Art. 4(2) / GDPR Art. 9 data); each save stores three
   ciphertexts (AES, DES, RC4).
-- **Files**: upload an ID card image / document / video, choose the block
-  cipher mode, then download it back decrypted with any of the three
-  algorithms.
+- **Records**: upload a card scan / medical document / medical video, then
+  download it back decrypted with any of the three algorithms. The server
+  uses CTR for AES and DES; a tampered file is refused rather than returned.
 - **Analysis**: per-algorithm timing tables (encryption + downloads), a
   per-file benchmark, and download history.
 

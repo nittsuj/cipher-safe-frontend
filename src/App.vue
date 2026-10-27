@@ -8,8 +8,8 @@ const auth = useAuthStore()
 const router = useRouter()
 
 const links = computed(() => [
-  { to: '/files', label: 'Files' },
-  { to: '/personal-data', label: 'Personal data' },
+  { to: '/files', label: 'Records' },
+  { to: '/personal-data', label: 'Patient profile' },
   { to: '/analysis', label: 'Analysis' },
 ])
 
@@ -22,7 +22,7 @@ async function handleLogout() {
 <template>
   <header class="topbar">
     <div class="topbar-inner">
-      <RouterLink to="/files" class="brand">Cipher Safe</RouterLink>
+      <RouterLink to="/files" class="brand">Cipher Safe · Medical Records Vault</RouterLink>
       <nav v-if="auth.isAuthenticated" class="nav">
         <RouterLink v-for="link in links" :key="link.to" :to="link.to">
           {{ link.label }}
