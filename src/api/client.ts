@@ -3,10 +3,7 @@ import type { Credentials } from '@/types/api'
 /** Base URL for the API. Empty by default so the Vite dev proxy handles `/api`. */
 const BASE = import.meta.env.VITE_API_BASE ?? ''
 
-/**
- * Supplies the credentials attached to every request. The auth store registers
- * this once, so call sites never have to thread tokens/password through.
- */
+/** Supplies the credentials for every request; set by the auth store. */
 let credentialsProvider: () => Partial<Credentials> = () => ({})
 
 export function setCredentialsProvider(provider: () => Partial<Credentials>): void {

@@ -8,10 +8,7 @@ export interface AsyncAction<TArgs extends unknown[], TResult> {
   run: (...args: TArgs) => Promise<TResult | undefined>
 }
 
-/**
- * Wrap an async action with `loading`/`error` state and consistent error
- * messages, removing the repeated try/catch/finally boilerplate from views.
- */
+/** Wrap an async action with `loading` and `error` state. */
 export function useAsyncAction<TArgs extends unknown[], TResult>(
   action: (...args: TArgs) => Promise<TResult>,
   fallback = 'Something went wrong.',

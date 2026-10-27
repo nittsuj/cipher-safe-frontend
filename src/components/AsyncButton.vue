@@ -1,8 +1,5 @@
 <script setup lang="ts">
-/**
- * Button that swaps its label while an async action is running.
- * Removes the repeated `loading ? 'X...' : 'Y'` ternaries in the views.
- */
+/** Button that shows a loading label while an async action runs. */
 withDefaults(
   defineProps<{
     label: string
