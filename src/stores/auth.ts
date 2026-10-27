@@ -25,7 +25,6 @@ export const useAuthStore = defineStore('auth', () => {
     password: password.value,
   }))
 
-  // Inject credentials into the shared API client so call sites stay clean.
   setCredentialsProvider(() => credentials.value)
 
   // One in-flight refresh is shared so concurrent 401s do not race and the
@@ -51,7 +50,7 @@ export const useAuthStore = defineStore('auth', () => {
           refreshInFlight = null
         })
     }
-    return refreshInFlight ?? Promise.resolve(null)
+    return refreshInFlight
   }
 
   setTokenRefresher(refreshAccessToken)
@@ -71,8 +70,8 @@ export const useAuthStore = defineStore('auth', () => {
     setSession(response, plainPassword)
   }
 
-  async function register(username: string, plainPassword: string, email = '') {
-    const response = await authApi.register(username, plainPassword, email)
+  async function register(username: string, plainPassword: string) {
+    const response = await authApi.register(username, plainPassword)
     setSession(response, plainPassword)
   }
 

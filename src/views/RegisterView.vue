@@ -10,13 +10,12 @@ const auth = useAuthStore()
 const router = useRouter()
 
 const username = ref('')
-const email = ref('')
 const password = ref('')
 const confirm = ref('')
 
 const register = useAsyncAction(async () => {
   if (password.value !== confirm.value) throw new Error('Passwords do not match.')
-  await auth.register(username.value, password.value, email.value)
+  await auth.register(username.value, password.value)
   router.push('/files')
 }, 'Registration failed.')
 </script>
@@ -29,10 +28,6 @@ const register = useAsyncAction(async () => {
         <div class="field">
           <label for="username">Username</label>
           <input id="username" v-model="username" autocomplete="username" required />
-        </div>
-        <div class="field">
-          <label for="email">Email (optional)</label>
-          <input id="email" v-model="email" type="email" autocomplete="email" />
         </div>
         <div class="field">
           <label for="password">Password (min 8 characters)</label>

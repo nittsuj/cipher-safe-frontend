@@ -15,7 +15,7 @@ describe('auth store', () => {
       'fetch',
       vi.fn<() => Promise<Response>>(async () =>
         jsonResponse({
-          user: { id: 1, username: 'alice', email: '', date_joined: '2026-01-01T00:00:00Z' },
+          user: { id: 1, username: 'alice', date_joined: '2026-01-01T00:00:00Z' },
           access: 'acc-123',
           refresh: 'ref-123',
         }),
@@ -91,7 +91,7 @@ describe('auth store', () => {
     auth.access = 'acc-123'
     auth.refresh = 'ref-123'
     auth.password = 'SuperSecret123!'
-    auth.user = { id: 1, username: 'alice', email: '', date_joined: '' }
+    auth.user = { id: 1, username: 'alice', date_joined: '' }
 
     await auth.logout()
 
