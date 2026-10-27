@@ -4,11 +4,9 @@ import { onMounted, reactive, ref } from 'vue'
 import AsyncButton from '@/components/AsyncButton.vue'
 import { useFilesStore } from '@/stores/files'
 import {
-  ALGORITHMS,
   FILE_CATEGORIES,
-  MODES,
+  MODE_FOR,
   type Algorithm,
-  type CipherMode,
   type FileCategory,
   type StoredFile,
 } from '@/types/api'
@@ -18,15 +16,12 @@ const store = useFilesStore()
 const message = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 
-const upload = reactive<{ file: File | null; category: FileCategory; mode: CipherMode }>({
+const upload = reactive<{ file: File | null; category: FileCategory }>({
   file: null,
   category: 'DOCUMENT',
-  mode: 'CBC',
 })
-const selectedAlgorithm = reactive<Record<number, Algorithm>>({})
-
-function algorithmFor(id: number): Algorithm {
-  return (selectedAlgorithm[id] ??= 'AES')
+function categoryLabel(value: FileCategory): string {
+  return FILE_CATEGORIES.find((item) => item.value === value)?.label ?? value
 }
 
 function onFileChange(event: Event) {
@@ -37,7 +32,7 @@ function onFileChange(event: Event) {
 async function submitUpload() {
   if (!upload.file) return
   message.value = ''
-  const created = await store.upload(upload.file, upload.category, upload.mode)
+  const created = await store.upload(upload.file, upload.category)
   if (created) {
     message.value = `Uploaded "${created.original_name}" (encrypted with AES, DES and RC4).`
     upload.file = null
@@ -45,9 +40,14 @@ async function submitUpload() {
   }
 }
 
-async function handleDownload(file: StoredFile) {
-  const result = await store.download(file.id, algorithmFor(file.id))
+async function handleDownload(file: StoredFile, algorithm: Algorithm) {
+  const result = await store.download(file.id, algorithm)
   if (result) downloadBlob(result.blob, result.filename ?? file.original_name)
+}
+
+async function handleDownloadEncrypted(file: StoredFile, algorithm: Algorithm) {
+  const result = await store.downloadCiphertext(file.id, algorithm)
+  if (result) downloadBlob(result.blob, result.filename ?? `record-${file.id}-${algorithm}.enc`)
 }
 
 async function handleRemove(file: StoredFile) {
@@ -59,10 +59,12 @@ onMounted(store.load)
 
 <template>
   <div class="container">
-    <h1>Files</h1>
+    <h1>My medical records</h1>
     <p class="muted">
-      ID card images, PDF/DOC/XLS documents and videos. Each upload is encrypted with AES, DES and
-      RC4 and can be downloaded back with any of them.
+      Your KTP / BPJS card scans, lab results, referral letters and medical videos, ready to show at
+      your next appointment. Each upload is encrypted with AES-{{ MODE_FOR.AES }}, DES-{{
+        MODE_FOR.DES
+      }} and RC4, protected by an integrity tag, and only you can download it back.
     </p>
 
     <form class="card" @submit.prevent="submitUpload">
@@ -78,12 +80,6 @@ onMounted(store.load)
             <option v-for="item in FILE_CATEGORIES" :key="item.value" :value="item.value">
               {{ item.label }}
             </option>
-          </select>
-        </div>
-        <div>
-          <label for="mode">Block mode (AES/DES)</label>
-          <select id="mode" v-model="upload.mode">
-            <option v-for="mode in MODES" :key="mode" :value="mode">{{ mode }}</option>
           </select>
         </div>
       </div>
@@ -107,25 +103,10 @@ onMounted(store.load)
         <div>
           <strong>{{ file.original_name }}</strong>
           <div class="muted small">
-            {{ file.category }} | {{ formatBytes(file.plaintext_size) }} | {{ formatDate(file.created_at) }}
+            {{ categoryLabel(file.category) }} | {{ formatBytes(file.plaintext_size) }} | {{ formatDate(file.created_at) }}
           </div>
         </div>
-        <div class="file-actions">
-          <select v-model="selectedAlgorithm[file.id]" @focus="algorithmFor(file.id)">
-            <option v-for="algorithm in ALGORITHMS" :key="algorithm" :value="algorithm">
-              {{ algorithm }}
-            </option>
-          </select>
-          <button :disabled="store.busyFileId === file.id" @click="handleDownload(file)">Download</button>
-          <button
-            class="secondary"
-            :disabled="store.busyFileId === file.id"
-            @click="store.benchmark(file.id, algorithmFor(file.id))"
-          >
-            Benchmark
-          </button>
-          <button class="danger" @click="handleRemove(file)">Delete</button>
-        </div>
+        <button class="danger" @click="handleRemove(file)">Delete</button>
       </div>
 
       <table>
@@ -136,6 +117,8 @@ onMounted(store.load)
             <th>Ciphertext</th>
             <th>Key derivation</th>
             <th>Cipher</th>
+            <th>HMAC</th>
+            <th>This copy</th>
           </tr>
         </thead>
         <tbody>
@@ -145,6 +128,30 @@ onMounted(store.load)
             <td>{{ formatBytes(ciphertext.ciphertext_size) }}</td>
             <td>{{ formatMs(ciphertext.key_derivation_ms) }}</td>
             <td>{{ formatMs(ciphertext.cipher_ms) }}</td>
+            <td>{{ formatMs(ciphertext.mac_ms) }}</td>
+            <td class="row-actions">
+              <button
+                :disabled="store.busyFileId === file.id"
+                @click="handleDownload(file, ciphertext.algorithm)"
+              >
+                Download
+              </button>
+              <button
+                class="secondary"
+                :disabled="store.busyFileId === file.id"
+                title="The stored bytes, not decrypted"
+                @click="handleDownloadEncrypted(file, ciphertext.algorithm)"
+              >
+                Encrypted
+              </button>
+              <button
+                class="secondary"
+                :disabled="store.busyFileId === file.id"
+                @click="store.benchmark(file.id, ciphertext.algorithm)"
+              >
+                Benchmark
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -162,7 +169,7 @@ onMounted(store.load)
 
 <style scoped>
 .upload-grid {
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr;
   margin-bottom: 1rem;
 }
 
@@ -175,15 +182,15 @@ onMounted(store.load)
   margin-bottom: 0.75rem;
 }
 
-.file-actions {
+.row-actions {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
+  gap: 0.4rem;
+  white-space: nowrap;
 }
 
-.file-actions select {
-  width: auto;
+.row-actions button {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
 }
 
 .small {

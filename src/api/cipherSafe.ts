@@ -2,7 +2,6 @@ import type {
   Algorithm,
   AuthResponse,
   BenchmarkResult,
-  CipherMode,
   DownloadEvent,
   FileCategory,
   PersonalData,
@@ -16,10 +15,10 @@ import { requestBlob, requestJson, withQuery } from './client'
 // these wrappers stay free of auth plumbing.
 
 export const authApi = {
-  register(username: string, password: string, email = ''): Promise<AuthResponse> {
+  register(username: string, password: string): Promise<AuthResponse> {
     return requestJson<AuthResponse>('/api/auth/register/', {
       method: 'POST',
-      json: { username, password, email },
+      json: { username, password },
       noAuth: true,
     })
   },
@@ -68,11 +67,10 @@ export const filesApi = {
     return requestJson<StoredFile>(`/api/files/${id}/`)
   },
 
-  upload(file: File, category: FileCategory, mode: CipherMode): Promise<StoredFile> {
+  upload(file: File, category: FileCategory): Promise<StoredFile> {
     const form = new FormData()
     form.append('file', file)
     form.append('category', category)
-    form.append('mode', mode)
     return requestJson<StoredFile>('/api/files/', { method: 'POST', form })
   },
 
@@ -85,6 +83,14 @@ export const filesApi = {
     algorithm: Algorithm,
   ): Promise<{ blob: Blob; filename: string | null }> {
     return requestBlob(withQuery(`/api/files/${id}/download/`, { algorithm }))
+  },
+
+  /** The stored copy as-is (ciphertext), to show that it is encrypted. */
+  downloadCiphertext(
+    id: number,
+    algorithm: Algorithm,
+  ): Promise<{ blob: Blob; filename: string | null }> {
+    return requestBlob(withQuery(`/api/files/${id}/ciphertext/`, { algorithm }))
   },
 
   benchmark(id: number, algorithm: Algorithm, runs: number): Promise<BenchmarkResult> {

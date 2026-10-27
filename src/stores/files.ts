@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import { filesApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
-import type { Algorithm, BenchmarkResult, CipherMode, FileCategory, StoredFile } from '@/types/api'
+import type { Algorithm, BenchmarkResult, FileCategory, StoredFile } from '@/types/api'
 
 /**
  * Owns the file domain: the list, per-file benchmark results and the state of
@@ -42,12 +42,11 @@ export const useFilesStore = defineStore('files', () => {
   async function upload(
     file: File,
     category: FileCategory,
-    mode: CipherMode,
   ): Promise<StoredFile | undefined> {
     uploading.value = true
     try {
       return await run('Upload failed.', async () => {
-        const created = await filesApi.upload(file, category, mode)
+        const created = await filesApi.upload(file, category)
         await load()
         return created
       })
@@ -84,6 +83,13 @@ export const useFilesStore = defineStore('files', () => {
     })
   }
 
+  function downloadCiphertext(id: number, algorithm: Algorithm) {
+    busyFileId.value = id
+    return run('Download failed.', () => filesApi.downloadCiphertext(id, algorithm)).finally(() => {
+      busyFileId.value = null
+    })
+  }
+
   return {
     items,
     benchmarks,
@@ -96,5 +102,6 @@ export const useFilesStore = defineStore('files', () => {
     remove,
     benchmark,
     download,
+    downloadCiphertext,
   }
 })

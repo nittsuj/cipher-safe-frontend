@@ -1,14 +1,17 @@
 export const ALGORITHMS = ['AES', 'DES', 'RC4'] as const
-export const MODES = ['CBC', 'CFB', 'OFB', 'CTR'] as const
+/** Mode used by the server for each cipher (fixed; not chosen per upload). */
+export const MODE_FOR: Record<(typeof ALGORITHMS)[number], string> = {
+  AES: 'CTR',
+  DES: 'CTR',
+  RC4: '',
+}
 export const FILE_CATEGORIES = [
-  { value: 'ID_CARD', label: 'ID card image' },
-  { value: 'DOCUMENT', label: 'PDF / DOC / XLS' },
-  { value: 'VIDEO', label: 'Video' },
-  { value: 'OTHER', label: 'Other' },
+  { value: 'ID_CARD', label: 'Identity / insurance card (KTP, BPJS)' },
+  { value: 'DOCUMENT', label: 'Medical document (lab result, referral, medication log)' },
+  { value: 'VIDEO', label: 'Medical video (ultrasound, echo, endoscopy)' },
 ] as const
 
 export type Algorithm = (typeof ALGORITHMS)[number]
-export type CipherMode = (typeof MODES)[number]
 export type FileCategory = (typeof FILE_CATEGORIES)[number]['value']
 
 /** Credentials attached to every request. Everything is held in memory only. */
@@ -21,7 +24,6 @@ export interface Credentials {
 export interface User {
   id: number
   username: string
-  email: string
   date_joined: string
 }
 
@@ -37,6 +39,7 @@ export interface FileCiphertext {
   ciphertext_size: number
   key_derivation_ms: number
   cipher_ms: number
+  mac_ms: number
   total_ms: number
 }
 
@@ -65,6 +68,7 @@ export interface DownloadEvent {
   bytes_out: number
   key_derivation_ms: number
   cipher_ms: number
+  mac_ms: number
   total_ms: number
   created_at: string
 }
@@ -81,7 +85,7 @@ export interface TimingRow {
 
 export interface TimingAnalysis {
   supported_algorithms: Algorithm[]
-  supported_modes: CipherMode[]
+  modes: Record<Algorithm, string>
   downloads: TimingRow[]
   encryptions: TimingRow[]
 }
@@ -98,11 +102,20 @@ export interface BenchmarkResult {
   mean_ms: number
 }
 
-export const PII_FIELDS: { name: string; label: string; type?: string }[] = [
+/**
+ * The patient profile. `health` marks UU PDP Art. 4(2) / GDPR Art. 9 health
+ * data; everything is encrypted either way.
+ */
+export const PII_FIELDS: { name: string; label: string; type?: string; health?: boolean }[] = [
   { name: 'full_name', label: 'Full name' },
-  { name: 'national_id', label: 'National ID (NIK)' },
+  { name: 'national_id', label: 'NIK (16 digits)' },
+  { name: 'bpjs_number', label: 'BPJS Kesehatan number (13 digits)' },
   { name: 'date_of_birth', label: 'Date of birth', type: 'date' },
   { name: 'address', label: 'Address' },
   { name: 'phone', label: 'Phone' },
-  { name: 'email', label: 'Email', type: 'email' },
+  { name: 'emergency_contact', label: 'Emergency contact' },
+  { name: 'blood_type', label: 'Blood type (e.g. O+)', health: true },
+  { name: 'allergies', label: 'Allergies', health: true },
+  { name: 'chronic_conditions', label: 'Chronic conditions', health: true },
+  { name: 'current_medications', label: 'Current medications', health: true },
 ]
