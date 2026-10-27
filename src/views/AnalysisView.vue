@@ -25,8 +25,8 @@ onMounted(() => {
   <div class="container">
     <h1>Analysis</h1>
     <p class="muted">
-      Running-time comparison per algorithm. Key derivation (PBKDF2, 600k rounds) dominates, which
-      is why the cipher column is separated out.
+      Running time per algorithm, including key derivation (PBKDF2, 600k rounds), the cipher and the
+      HMAC check. Each file's own table under Records shows the three parts separately.
     </p>
 
     <div class="row">
