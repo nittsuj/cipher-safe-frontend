@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import AsyncButton from '@/components/AsyncButton.vue'
+import BenchmarkChart from '@/components/BenchmarkChart.vue'
 import FilePreview from '@/components/FilePreview.vue'
 import { filesApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
@@ -150,14 +151,11 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
             <AsyncButton
               variant="secondary"
               :loading="busy"
-              label="Benchmark AES decryption (10 runs)"
-              loading-label="Running…"
-              @click="store.benchmark(file.id, 'AES')"
+              label="Benchmark decryption (10 runs each)"
+              loading-label="Running AES, DES, RC4…"
+              @click="store.benchmark(file.id)"
             />
-            <p v-if="benchmark" class="muted small">
-              {{ benchmark.algorithm }} over {{ benchmark.runs }} runs: min {{ formatMs(benchmark.min_ms) }},
-              mean {{ formatMs(benchmark.mean_ms) }}, max {{ formatMs(benchmark.max_ms) }}
-            </p>
+            <BenchmarkChart v-if="benchmark" :results="benchmark" />
           </div>
         </details>
 

@@ -96,10 +96,14 @@ export interface BenchmarkResult {
   mode: string
   runs: number
   ciphertext_size: number
+  /** Full decrypt per run, including key setup. */
   samples_ms: number[]
   min_ms: number
   max_ms: number
   mean_ms: number
+  /** Cipher + integrity check per run, without key setup. */
+  cipher_samples_ms: number[]
+  cipher_mean_ms: number
 }
 
 /**
@@ -162,3 +166,11 @@ export const PREVIEWABLE_TYPES = [
 ] as const
 
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
+
+/** One bar in an algorithm comparison chart. */
+export interface BarRow {
+  algorithm: Algorithm
+  value: number
+  /** Extra values for the tooltip and table view (e.g. min / max). */
+  details?: { label: string; value: string }[]
+}

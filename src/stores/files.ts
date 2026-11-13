@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import { filesApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
-import type { Algorithm, BenchmarkResult, FileCategory, StoredFile } from '@/types/api'
+import { ALGORITHMS, type Algorithm, type BenchmarkResult, type FileCategory, type StoredFile } from '@/types/api'
 
 /**
  * Owns the file domain: the list, per-file benchmark results and the state of
@@ -11,7 +11,8 @@ import type { Algorithm, BenchmarkResult, FileCategory, StoredFile } from '@/typ
  */
 export const useFilesStore = defineStore('files', () => {
   const items = ref<StoredFile[]>([])
-  const benchmarks = ref<Record<number, BenchmarkResult>>({})
+  /** Latest benchmark per file, one result per algorithm. */
+  const benchmarks = ref<Record<number, Partial<Record<Algorithm, BenchmarkResult>>>>({})
   const loading = ref(false)
   const uploading = ref(false)
   const busyFileId = ref<number | null>(null)
@@ -65,11 +66,16 @@ export const useFilesStore = defineStore('files', () => {
     return removed ?? false
   }
 
-  async function benchmark(id: number, algorithm: Algorithm, runs = 10): Promise<void> {
+  /** Benchmark all three algorithms on one file, so they can be compared. */
+  async function benchmark(id: number, runs = 10): Promise<void> {
     busyFileId.value = id
     try {
       await run('Benchmark failed.', async () => {
-        benchmarks.value[id] = await filesApi.benchmark(id, algorithm, runs)
+        const results: Partial<Record<Algorithm, BenchmarkResult>> = {}
+        for (const algorithm of ALGORITHMS) {
+          results[algorithm] = await filesApi.benchmark(id, algorithm, runs)
+        }
+        benchmarks.value[id] = results
       })
     } finally {
       busyFileId.value = null
