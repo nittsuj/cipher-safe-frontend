@@ -1,6 +1,16 @@
 import { createRouter, createWebHistory, type RouteRecordRaw, type Router } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import type { Role } from '@/types/api'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean
+    guestOnly?: boolean
+    /** Only this account role may open the page. */
+    role?: Role
+  }
+}
 
 export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/files' },
@@ -20,19 +30,25 @@ export const routes: RouteRecordRaw[] = [
     path: '/personal-data',
     name: 'personal-data',
     component: () => import('@/views/PersonalDataView.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, role: 'PATIENT' },
   },
   {
     path: '/files',
     name: 'files',
     component: () => import('@/views/FilesView.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, role: 'PATIENT' },
   },
   {
     path: '/analysis',
     name: 'analysis',
     component: () => import('@/views/AnalysisView.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, role: 'PATIENT' },
+  },
+  {
+    path: '/shared',
+    name: 'shared',
+    component: () => import('@/views/SharedView.vue'),
+    meta: { requiresAuth: true, role: 'DOCTOR' },
   },
   { path: '/:pathMatch(.*)*', redirect: '/files' },
 ]
@@ -48,8 +64,12 @@ export function installGuards(target: Router): void {
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
       return { name: 'login', query: { redirect: to.fullPath } }
     }
+    const home = auth.isDoctor ? 'shared' : 'files'
     if (to.meta.guestOnly && auth.isAuthenticated) {
-      return { name: 'files' }
+      return { name: home }
+    }
+    if (to.meta.role && auth.user && to.meta.role !== auth.user.role) {
+      return { name: home }
     }
     return true
   })

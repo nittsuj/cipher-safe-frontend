@@ -66,6 +66,8 @@ interface RequestOptions {
   json?: unknown
   form?: FormData
   signal?: AbortSignal
+  /** Extra request headers, e.g. the doctor's X-Share-Key. */
+  headers?: Record<string, string>
 }
 
 function resolveCredentials(options: RequestOptions): Partial<Credentials> {
@@ -76,7 +78,7 @@ function buildHeaders(
   options: RequestOptions,
   credentials: Partial<Credentials>,
 ): Record<string, string> {
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = { ...options.headers }
   if (credentials.access) headers['Authorization'] = `Bearer ${credentials.access}`
   if (credentials.password) headers['X-Cipher-Password'] = credentials.password
   if (options.json !== undefined) headers['Content-Type'] = 'application/json'

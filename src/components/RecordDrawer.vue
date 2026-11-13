@@ -4,12 +4,19 @@ import { computed, ref, watch } from 'vue'
 import AsyncButton from '@/components/AsyncButton.vue'
 import BenchmarkChart from '@/components/BenchmarkChart.vue'
 import FilePreview from '@/components/FilePreview.vue'
-import { filesApi } from '@/api/cipherSafe'
+import { filesApi, sharesApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { useFilesStore } from '@/stores/files'
-import type { Algorithm, StoredFile } from '@/types/api'
-import { categoryLabel, downloadBlob, formatBytes, formatDate, formatMs } from '@/utils/format'
+import type { Algorithm, CreatedShare, FileShare, StoredFile } from '@/types/api'
+import {
+  categoryLabel,
+  downloadBlob,
+  formatBytes,
+  formatDate,
+  formatMs,
+  formatUntil,
+} from '@/utils/format'
 
 const props = defineProps<{ file: StoredFile | null }>()
 const emit = defineEmits<{ close: [] }>()
@@ -25,12 +32,17 @@ watch(
     if (id !== undefined) {
       reset()
       if (!dialog.value?.open) dialog.value?.showModal()
+      loadShares.run()
     } else dialog.value?.close()
   },
 )
 
 function reset() {
+  shares.value = []
+  created.value = null
+  doctor.value = ''
   confirmingDelete.value = false
+  copied.value = false
 }
 
 // Preview
@@ -63,6 +75,39 @@ const downloadEncrypted = useAsyncAction(async (algorithm: Algorithm) => {
   const result = await filesApi.downloadCiphertext(props.file.id, algorithm)
   downloadBlob(result.blob, result.filename ?? `${props.file.original_name}.${algorithm}-encrypted`)
 }, 'Download failed.')
+
+// Sharing
+const shares = ref<FileShare[]>([])
+const doctor = ref('')
+const hours = ref(24)
+const created = ref<CreatedShare | null>(null)
+const copied = ref(false)
+
+const loadShares = useAsyncAction(async () => {
+  if (props.file) shares.value = await sharesApi.forFile(props.file.id)
+}, 'Could not load shares.')
+
+const share = useAsyncAction(async () => {
+  if (!props.file) return
+  created.value = await sharesApi.create(props.file.id, doctor.value.trim(), hours.value)
+  copied.value = false
+  doctor.value = ''
+  await loadShares.run()
+}, 'Could not share this record.')
+
+const revoke = useAsyncAction(async (id: number) => {
+  await sharesApi.revoke(id)
+  if (created.value?.id === id) created.value = null
+  await loadShares.run()
+}, 'Could not stop sharing.')
+
+async function copyKey() {
+  if (!created.value) return
+  await navigator.clipboard.writeText(created.value.share_key)
+  copied.value = true
+}
+
+const activeShares = computed(() => shares.value.filter((s) => s.active))
 
 // Delete
 const confirmingDelete = ref(false)
@@ -102,6 +147,58 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
           />
         </div>
         <p v-if="download.error.value" class="notice error">{{ download.error.value }}</p>
+
+        <section class="block">
+          <h3>Share with a doctor</h3>
+          <p class="muted small">
+            The doctor gets a separate copy, locked with a one-time key. Send them the key yourself, by
+            WhatsApp or in person. Without it they can't open anything.
+          </p>
+
+          <div v-if="created" class="key-card" role="status">
+            <p class="small">Key for <strong>{{ created.doctor }}</strong>. This is the only time it's shown.</p>
+            <p class="key share-key">{{ created.share_key }}</p>
+            <button class="secondary" @click="copyKey">{{ copied ? 'Copied' : 'Copy key' }}</button>
+          </div>
+
+          <form class="share-form" @submit.prevent="share.run()">
+            <div>
+              <label for="doctor">Doctor's username</label>
+              <input id="doctor" v-model="doctor" autocomplete="off" required />
+            </div>
+            <div>
+              <label for="hours">Open for</label>
+              <select id="hours" v-model.number="hours">
+                <option :value="1">1 hour</option>
+                <option :value="24">1 day</option>
+                <option :value="72">3 days</option>
+                <option :value="168">1 week</option>
+              </select>
+            </div>
+            <AsyncButton
+              type="submit"
+              :loading="share.loading.value"
+              :disabled="!doctor.trim()"
+              label="Create key"
+              loading-label="Locking copy…"
+            />
+          </form>
+          <p v-if="share.error.value" class="notice error">{{ share.error.value }}</p>
+
+          <ul v-if="activeShares.length" class="shares">
+            <li v-for="item in activeShares" :key="item.id">
+              <span>
+                <strong>{{ item.doctor }}</strong>
+                <span class="muted small">
+                  closes {{ formatUntil(item.expires_at) }}, opened {{ item.access_count }}×
+                </span>
+              </span>
+              <button class="danger small" :disabled="revoke.loading.value" @click="revoke.run(item.id)">
+                Stop sharing
+              </button>
+            </li>
+          </ul>
+        </section>
 
         <details class="block">
           <summary>How it's protected</summary>
@@ -164,7 +261,7 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
             <button class="danger" @click="confirmingDelete = true">Delete record</button>
           </template>
           <div v-else class="confirm" role="alert">
-            <p>Delete <strong>{{ file.original_name }}</strong>? This can't be undone.</p>
+            <p>Delete <strong>{{ file.original_name }}</strong> and every shared copy? This can't be undone.</p>
             <div class="row">
               <button class="danger" @click="remove">Delete for good</button>
               <button class="secondary" @click="confirmingDelete = false">Keep it</button>
@@ -276,6 +373,48 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
   border-top: 1px solid var(--line);
 }
 
+.share-form {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.key-card {
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  background: var(--accent-soft);
+  border-radius: var(--radius-sheet);
+}
+
+.share-key {
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: 0.25rem 0 0.75rem;
+  user-select: all;
+}
+
+.shares {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+}
+
+.shares li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.shares li > span {
+  display: flex;
+  flex-direction: column;
+}
+
 .bench {
   margin-top: 1rem;
   display: grid;
@@ -298,5 +437,15 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
 button.small {
   min-height: 2.2rem;
   font-size: 0.9rem;
+}
+
+@media (max-width: 560px) {
+  .share-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .share-form > :first-child {
+    grid-column: 1 / -1;
+  }
 }
 </style>

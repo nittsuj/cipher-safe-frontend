@@ -2,6 +2,10 @@ import type {
   Algorithm,
   AuthResponse,
   BenchmarkResult,
+  CreatedShare,
+  FileShare,
+  ReceivedShare,
+  Role,
   DownloadEvent,
   FileCategory,
   PersonalData,
@@ -15,10 +19,10 @@ import { requestBlob, requestJson, withQuery } from './client'
 // these wrappers stay free of auth plumbing.
 
 export const authApi = {
-  register(username: string, password: string): Promise<AuthResponse> {
+  register(username: string, password: string, role: Role = 'PATIENT'): Promise<AuthResponse> {
     return requestJson<AuthResponse>('/api/auth/register/', {
       method: 'POST',
-      json: { username, password },
+      json: { username, password, role },
       noAuth: true,
     })
   },
@@ -112,5 +116,32 @@ export const analysisApi = {
 
   downloads(): Promise<DownloadEvent[]> {
     return requestJson<DownloadEvent[]>('/api/analysis/downloads/')
+  },
+}
+
+export const sharesApi = {
+  forFile(fileId: number): Promise<FileShare[]> {
+    return requestJson<FileShare[]>(`/api/files/${fileId}/shares/`)
+  },
+
+  create(fileId: number, doctor: string, expiresHours: number): Promise<CreatedShare> {
+    return requestJson<CreatedShare>(`/api/files/${fileId}/shares/`, {
+      method: 'POST',
+      json: { doctor, expires_hours: expiresHours },
+    })
+  },
+
+  revoke(shareId: number): Promise<void> {
+    return requestJson<void>(`/api/shares/${shareId}/`, { method: 'DELETE' })
+  },
+
+  received(): Promise<ReceivedShare[]> {
+    return requestJson<ReceivedShare[]>('/api/shares/received/')
+  },
+
+  open(shareId: number, key: string): Promise<{ blob: Blob; filename: string | null }> {
+    return requestBlob(withQuery(`/api/shares/received/${shareId}/open/`, { inline: 1 }), {
+      headers: { 'X-Share-Key': key },
+    })
   },
 }

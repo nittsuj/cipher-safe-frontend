@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import { authApi } from '@/api/cipherSafe'
 import { setCredentialsProvider, setTokenRefresher } from '@/api/client'
-import type { Credentials, User } from '@/types/api'
+import type { Credentials, Role, User } from '@/types/api'
 
 /**
  * Authentication + cipher state.
@@ -19,6 +19,7 @@ export const useAuthStore = defineStore('auth', () => {
   const password = ref<string | null>(null)
 
   const isAuthenticated = computed(() => Boolean(access.value && password.value))
+  const isDoctor = computed(() => user.value?.role === 'DOCTOR')
   const credentials = computed<Credentials>(() => ({
     access: access.value,
     refresh: refresh.value,
@@ -70,8 +71,8 @@ export const useAuthStore = defineStore('auth', () => {
     setSession(response, plainPassword)
   }
 
-  async function register(username: string, plainPassword: string) {
-    const response = await authApi.register(username, plainPassword)
+  async function register(username: string, plainPassword: string, role: Role = 'PATIENT') {
+    const response = await authApi.register(username, plainPassword, role)
     setSession(response, plainPassword)
   }
 
@@ -98,6 +99,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     password,
     isAuthenticated,
+    isDoctor,
     credentials,
     login,
     register,
