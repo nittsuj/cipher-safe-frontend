@@ -1,3 +1,5 @@
+import { FILE_CATEGORIES } from '@/config/records'
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB']
@@ -30,7 +32,11 @@ export function downloadBlob(blob: Blob, filename: string): void {
 }
 
 export function formatDay(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 /** "in 23 h" / "in 3 days" until a future date; "expired" once past. */
@@ -42,12 +48,7 @@ export function formatUntil(iso: string): string {
   return `in ${Math.round(hours / 24)} days`
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  ID_CARD: 'ID & insurance',
-  DOCUMENT: 'Medical document',
-  VIDEO: 'Medical video',
-}
-
+/** Display name of a record category, from the single list in `@/config/records`. */
 export function categoryLabel(value: string): string {
-  return CATEGORY_LABELS[value] ?? value
+  return FILE_CATEGORIES.find((c) => c.value === value)?.label ?? value
 }
