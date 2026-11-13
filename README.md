@@ -78,6 +78,24 @@ For the end-to-end tests, download the browsers once:
 pnpm exec playwright install
 ```
 
+### Try it without the backend
+
+```bash
+pnpm dev:mock        # http://localhost:5173, no backend or Docker needed
+```
+
+An in-browser mock (MSW, in `src/mocks/`) answers every `/api` call, so you
+can click through all screens. Sign in with:
+
+| Account | Username | Password |
+| --- | --- | --- |
+| Patient (has a profile and 2 records) | `patient` | `patient-password` |
+| Doctor | `doctor` | `doctor-password` |
+
+The mock does no real cryptography: "encrypted" copies are scrambled bytes and
+timings are made up, so don't use its numbers in the report. Data lives in
+memory and resets when you reload the page. Production builds don't include it.
+
 ### 3. Optional: `.env`
 
 Nothing has to be generated for the frontend; it has no secrets.
@@ -97,6 +115,7 @@ VITE_API_BASE=            # empty = use the dev proxy / same-origin /api
 | Command | Purpose |
 | --- | --- |
 | `pnpm dev` | Dev server with hot reload + API proxy |
+| `pnpm dev:mock` | Dev server with the in-browser mock API (no backend) |
 | `pnpm build` | Type-check and production build into `dist/` |
 | `pnpm type-check` | `vue-tsc` only |
 | `pnpm test:unit` | Vitest unit tests |
@@ -112,6 +131,7 @@ src/
   assets/       global styles
   components/   drawer, preview, share section, charts
   composables/  useAsyncAction (loading/error wrapper)
+  mocks/        in-browser mock API for `pnpm dev:mock` (MSW)
   config/       UI settings: record categories, profile form layout
   router/       routes + auth guards
   stores/       Pinia stores (auth, files)

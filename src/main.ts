@@ -11,4 +11,12 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 
-app.mount('#app')
+async function enableMocking(): Promise<void> {
+  // Dev-only mock API (`pnpm dev:mock`); the import is dropped from builds.
+  if (import.meta.env.DEV && import.meta.env.VITE_MOCK === 'true') {
+    const { startMockApi } = await import('./mocks/browser')
+    await startMockApi()
+  }
+}
+
+enableMocking().then(() => app.mount('#app'))
