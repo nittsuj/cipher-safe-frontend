@@ -2,6 +2,8 @@ import type {
   Algorithm,
   AuthResponse,
   BenchmarkResult,
+  CreatedShare,
+  FileShare,
   DownloadEvent,
   FileCategory,
   PersonalData,
@@ -112,5 +114,22 @@ export const analysisApi = {
 
   downloads(): Promise<DownloadEvent[]> {
     return requestJson<DownloadEvent[]>('/api/analysis/downloads/')
+  },
+}
+
+export const sharesApi = {
+  forFile(fileId: number): Promise<FileShare[]> {
+    return requestJson<FileShare[]>(`/api/files/${fileId}/shares/`)
+  },
+
+  create(fileId: number, doctor: string, expiresHours: number): Promise<CreatedShare> {
+    return requestJson<CreatedShare>(`/api/files/${fileId}/shares/`, {
+      method: 'POST',
+      json: { doctor, expires_hours: expiresHours },
+    })
+  },
+
+  revoke(shareId: number): Promise<void> {
+    return requestJson<void>(`/api/shares/${shareId}/`, { method: 'DELETE' })
   },
 }

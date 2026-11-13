@@ -165,6 +165,22 @@ export const PREVIEWABLE_TYPES = [
   'text/plain',
 ] as const
 
+export interface FileShare {
+  id: number
+  file: number
+  doctor: string
+  created_at: string
+  expires_at: string
+  active: boolean
+  access_count: number
+  last_accessed_at: string | null
+}
+
+export interface CreatedShare extends FileShare {
+  /** Shown once; the server does not keep it. */
+  share_key: string
+}
+
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
 
 /** One bar in an algorithm comparison chart. */

@@ -33,6 +33,15 @@ export function formatDay(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/** "in 23 h" / "in 3 days" until a future date; "expired" once past. */
+export function formatUntil(iso: string): string {
+  const hours = (new Date(iso).getTime() - Date.now()) / 3_600_000
+  if (hours <= 0) return 'expired'
+  if (hours < 1) return `in ${Math.max(1, Math.round(hours * 60))} min`
+  if (hours < 48) return `in ${Math.round(hours)} h`
+  return `in ${Math.round(hours / 24)} days`
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   ID_CARD: 'ID & insurance',
   DOCUMENT: 'Medical document',

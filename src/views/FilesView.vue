@@ -58,7 +58,7 @@ onMounted(store.load)
       <h1>Your records</h1>
       <p class="lede">
         Bring your history to the next appointment: ID and BPJS cards, lab results, referral letters
-        and scan videos. Only you can open them.
+        and scan videos. Only you can open them, unless you share one with your doctor.
       </p>
     </header>
 

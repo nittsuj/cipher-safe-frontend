@@ -10,6 +10,7 @@ defineProps<{ title: string }>()
       <ul>
         <li>Keep KTP and BPJS cards, lab results and scan videos together.</li>
         <li>Open them at any clinic, on your phone.</li>
+        <li>Share one record with a doctor using a key only you can give.</li>
       </ul>
     </aside>
     <section class="sheet form-sheet">
