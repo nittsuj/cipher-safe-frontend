@@ -1,0 +1,20 @@
+# Weekly PRs for outdated dependencies; CI tests each one before it is merged.
+version: 2
+updates:
+  # "npm" is Dependabot's name for the JavaScript ecosystem; it reads pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      frontend:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
