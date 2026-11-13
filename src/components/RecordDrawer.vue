@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 
 import AsyncButton from '@/components/AsyncButton.vue'
-import BenchmarkChart from '@/components/BenchmarkChart.vue'
+import CipherDetails from '@/components/CipherDetails.vue'
 import FilePreview from '@/components/FilePreview.vue'
 import ShareSection from '@/components/ShareSection.vue'
 import { filesApi } from '@/api/cipherSafe'
@@ -10,7 +10,7 @@ import { getErrorMessage } from '@/api/client'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { useFilesStore } from '@/stores/files'
 import type { Algorithm, StoredFile } from '@/types/api'
-import { categoryLabel, downloadBlob, formatBytes, formatDate, formatMs } from '@/utils/format'
+import { categoryLabel, downloadBlob, formatBytes, formatDate } from '@/utils/format'
 
 const props = defineProps<{ file: StoredFile | null }>()
 const emit = defineEmits<{ close: [] }>()
@@ -59,21 +59,12 @@ const download = useAsyncAction(async (algorithm: Algorithm = 'AES') => {
   downloadBlob(result.blob, result.filename ?? props.file.original_name)
 }, 'Download failed.')
 
-const downloadEncrypted = useAsyncAction(async (algorithm: Algorithm) => {
-  if (!props.file) return
-  const result = await filesApi.downloadCiphertext(props.file.id, algorithm)
-  downloadBlob(result.blob, result.filename ?? `${props.file.original_name}.${algorithm}-encrypted`)
-}, 'Download failed.')
-
 // Delete
 const confirmingDelete = ref(false)
 async function remove() {
   if (!props.file) return
   if (await store.remove(props.file.id)) emit('close')
 }
-
-const benchmark = computed(() => (props.file ? store.benchmarks[props.file.id] : undefined))
-const busy = computed(() => props.file !== null && store.busyFileId === props.file.id)
 </script>
 
 <template>
@@ -106,61 +97,7 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
 
         <ShareSection :file-id="file.id" />
 
-        <details class="block">
-          <summary>How it's protected</summary>
-          <p class="muted small">
-            Each record is stored three times, once per cipher, each with its own key from your
-            password. AES uses GCM, which detects any change by itself; DES and RC4 add an HMAC check.
-          </p>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Cipher</th>
-                  <th class="num">Key setup</th>
-                  <th class="num">Cipher</th>
-                  <th class="num">Integrity</th>
-                  <th><span class="visually-hidden">Encrypted copy</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="c in file.ciphertexts" :key="c.algorithm">
-                  <td>
-                    <strong>{{ c.algorithm }}</strong>
-                    <span class="muted small">{{ c.mode ? `-${c.mode}` : '' }}</span>
-                  </td>
-                  <td class="num">{{ formatMs(c.key_derivation_ms) }}</td>
-                  <td class="num">{{ formatMs(c.cipher_ms) }}</td>
-                  <td class="num">{{ c.mode === 'GCM' ? 'in GCM' : formatMs(c.mac_ms) }}</td>
-                  <td>
-                    <button
-                      class="quiet small"
-                      :disabled="downloadEncrypted.loading.value"
-                      :aria-label="`Download the ${c.algorithm} encrypted copy`"
-                      @click="downloadEncrypted.run(c.algorithm)"
-                    >
-                      Encrypted copy
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p v-if="downloadEncrypted.error.value" class="notice error">
-            {{ downloadEncrypted.error.value }}
-          </p>
-
-          <div class="bench">
-            <AsyncButton
-              variant="secondary"
-              :loading="busy"
-              label="Benchmark decryption (10 runs each)"
-              loading-label="Running AES, DES, RC4…"
-              @click="store.benchmark(file.id)"
-            />
-            <BenchmarkChart v-if="benchmark" :results="benchmark" />
-          </div>
-        </details>
+        <CipherDetails :file="file" />
 
         <section class="block delete">
           <template v-if="!confirmingDelete">
@@ -279,16 +216,6 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
   border-top: 1px solid var(--line);
 }
 
-.bench {
-  margin-top: 1rem;
-  display: grid;
-  gap: 1rem;
-}
-
-.bench > button {
-  justify-self: start;
-}
-
 .confirm p {
   margin-bottom: 0.75rem;
 }
@@ -296,10 +223,5 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
 .row {
   display: flex;
   gap: 0.6rem;
-}
-
-button.small {
-  min-height: 2.2rem;
-  font-size: 0.9rem;
 }
 </style>
