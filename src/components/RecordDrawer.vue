@@ -2,7 +2,9 @@
 import { computed, ref, watch } from 'vue'
 
 import AsyncButton from '@/components/AsyncButton.vue'
+import FilePreview from '@/components/FilePreview.vue'
 import { filesApi } from '@/api/cipherSafe'
+import { getErrorMessage } from '@/api/client'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { useFilesStore } from '@/stores/files'
 import type { Algorithm, StoredFile } from '@/types/api'
@@ -30,10 +32,35 @@ function reset() {
   confirmingDelete.value = false
 }
 
+// Preview
+const preview = ref({ open: false, blob: null as Blob | null, filename: null as string | null, error: '' })
+const previewing = ref(false)
+
+async function openPreview() {
+  if (!props.file) return
+  preview.value = { open: true, blob: null, filename: null, error: '' }
+  previewing.value = true
+  try {
+    const result = await filesApi.preview(props.file.id)
+    preview.value.blob = result.blob
+    preview.value.filename = result.filename ?? props.file.original_name
+  } catch (err) {
+    preview.value.error = getErrorMessage(err, 'Could not open this record.')
+  } finally {
+    previewing.value = false
+  }
+}
+
 const download = useAsyncAction(async (algorithm: Algorithm = 'AES') => {
   if (!props.file) return
   const result = await filesApi.download(props.file.id, algorithm)
   downloadBlob(result.blob, result.filename ?? props.file.original_name)
+}, 'Download failed.')
+
+const downloadEncrypted = useAsyncAction(async (algorithm: Algorithm) => {
+  if (!props.file) return
+  const result = await filesApi.downloadCiphertext(props.file.id, algorithm)
+  downloadBlob(result.blob, result.filename ?? `${props.file.original_name}.${algorithm}-encrypted`)
 }, 'Download failed.')
 
 // Delete
@@ -64,7 +91,9 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
 
       <div class="drawer-body">
         <div class="primary-actions">
+          <button @click="openPreview">Open</button>
           <AsyncButton
+            variant="secondary"
             :loading="download.loading.value"
             label="Download"
             loading-label="Decrypting…"
@@ -87,6 +116,7 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
                   <th class="num">Key setup</th>
                   <th class="num">Cipher</th>
                   <th class="num">Integrity</th>
+                  <th><span class="visually-hidden">Encrypted copy</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -98,10 +128,23 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
                   <td class="num">{{ formatMs(c.key_derivation_ms) }}</td>
                   <td class="num">{{ formatMs(c.cipher_ms) }}</td>
                   <td class="num">{{ c.mode === 'GCM' ? 'in GCM' : formatMs(c.mac_ms) }}</td>
+                  <td>
+                    <button
+                      class="quiet small"
+                      :disabled="downloadEncrypted.loading.value"
+                      :aria-label="`Download the ${c.algorithm} encrypted copy`"
+                      @click="downloadEncrypted.run(c.algorithm)"
+                    >
+                      Encrypted copy
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <p v-if="downloadEncrypted.error.value" class="notice error">
+            {{ downloadEncrypted.error.value }}
+          </p>
 
           <div class="bench">
             <AsyncButton
@@ -133,6 +176,16 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
       </div>
     </template>
   </dialog>
+
+  <FilePreview
+    :open="preview.open"
+    :title="file?.original_name ?? 'Record'"
+    :blob="preview.blob"
+    :filename="preview.filename"
+    :loading="previewing"
+    :error="preview.error"
+    @close="preview.open = false"
+  />
 </template>
 
 <style scoped>
