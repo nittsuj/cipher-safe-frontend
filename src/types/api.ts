@@ -96,10 +96,14 @@ export interface BenchmarkResult {
   mode: string
   runs: number
   ciphertext_size: number
+  /** Full decrypt per run, including key setup. */
   samples_ms: number[]
   min_ms: number
   max_ms: number
   mean_ms: number
+  /** Cipher + integrity check per run, without key setup. */
+  cipher_samples_ms: number[]
+  cipher_mean_ms: number
 }
 
 /**
