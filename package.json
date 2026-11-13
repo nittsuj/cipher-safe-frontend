@@ -6,6 +6,7 @@
   "packageManager": "pnpm@12.17.0",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "vite --mode mock",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest",
