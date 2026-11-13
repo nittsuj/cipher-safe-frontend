@@ -4,6 +4,7 @@ import type {
   BenchmarkResult,
   CreatedShare,
   FileShare,
+  Role,
   DownloadEvent,
   FileCategory,
   PersonalData,
@@ -17,10 +18,10 @@ import { requestBlob, requestJson, withQuery } from './client'
 // these wrappers stay free of auth plumbing.
 
 export const authApi = {
-  register(username: string, password: string): Promise<AuthResponse> {
+  register(username: string, password: string, role: Role = 'PATIENT'): Promise<AuthResponse> {
     return requestJson<AuthResponse>('/api/auth/register/', {
       method: 'POST',
-      json: { username, password },
+      json: { username, password, role },
       noAuth: true,
     })
   },

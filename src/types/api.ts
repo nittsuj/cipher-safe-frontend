@@ -11,6 +11,8 @@ export const FILE_CATEGORIES = [
   { value: 'VIDEO', label: 'Medical video', hint: 'Ultrasound, echo, endoscopy' },
 ] as const
 
+export type Role = 'PATIENT' | 'DOCTOR'
+
 export type Algorithm = (typeof ALGORITHMS)[number]
 export type FileCategory = (typeof FILE_CATEGORIES)[number]['value']
 
@@ -24,6 +26,7 @@ export interface Credentials {
 export interface User {
   id: number
   username: string
+  role: Role
   date_joined: string
 }
 

@@ -91,7 +91,7 @@ describe('auth store', () => {
     auth.access = 'acc-123'
     auth.refresh = 'ref-123'
     auth.password = 'SuperSecret123!'
-    auth.user = { id: 1, username: 'alice', date_joined: '' }
+    auth.user = { id: 1, username: 'alice', role: 'PATIENT', date_joined: '' }
 
     await auth.logout()
 
