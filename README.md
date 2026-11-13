@@ -89,7 +89,7 @@ VITE_API_BASE=            # empty = use the dev proxy / same-origin /api
 
 ## Layout
 
-```
+```text
 src/
   api/          fetch client + typed endpoint wrappers
   assets/       global styles
