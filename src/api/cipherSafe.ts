@@ -85,6 +85,11 @@ export const filesApi = {
     return requestBlob(withQuery(`/api/files/${id}/download/`, { algorithm }))
   },
 
+  /** Decrypted bytes served inline, for the in-browser preview. */
+  preview(id: number, algorithm: Algorithm = 'AES'): Promise<{ blob: Blob; filename: string | null }> {
+    return requestBlob(withQuery(`/api/files/${id}/download/`, { algorithm, inline: 1 }))
+  },
+
   /** The stored copy as-is (ciphertext), to show that it is encrypted. */
   downloadCiphertext(
     id: number,

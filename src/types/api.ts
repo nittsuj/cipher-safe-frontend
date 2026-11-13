@@ -147,4 +147,18 @@ export const PROFILE_GROUPS: { title: string; health?: boolean; fields: ProfileF
 
 export const PII_FIELDS: ProfileField[] = PROFILE_GROUPS.flatMap((group) => group.fields)
 
+/** Types the browser may render in the preview. Anything else (HTML, SVG...)
+ * could run script, so it is offered as a download only. */
+export const PREVIEWABLE_TYPES = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'text/plain',
+] as const
+
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
