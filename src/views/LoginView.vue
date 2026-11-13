@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AsyncButton from '@/components/AsyncButton.vue'
+import AuthShell from '@/components/AuthShell.vue'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { useAuthStore } from '@/stores/auth'
 
@@ -17,47 +18,49 @@ const login = useAsyncAction(async () => {
   await auth.login(username.value, password.value)
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/files'
   router.push(redirect)
-}, 'Login failed.')
+}, 'Could not sign in. Check your connection and try again.')
 </script>
 
 <template>
-  <div class="container narrow">
-    <div class="card">
-      <h2>Sign in</h2>
-      <p class="muted">
-        Your password both authenticates you and derives the encryption keys, so it is kept in
-        memory for this session only.
-      </p>
-      <form @submit.prevent="login.run()">
-        <div class="field">
-          <label for="username">Username</label>
-          <input id="username" v-model="username" autocomplete="username" required />
-        </div>
-        <div class="field">
-          <label for="password">Password</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            autocomplete="current-password"
-            required
-          />
-        </div>
-        <p v-if="login.error.value" class="error">{{ login.error.value }}</p>
-        <AsyncButton
-          type="submit"
-          :loading="login.loading.value"
-          label="Sign in"
-          loading-label="Signing in..."
+  <AuthShell title="Sign in">
+    <p v-if="route.query.redirect" class="notice info small">
+      You were signed out because the page was reloaded. Your password is only kept while this tab
+      is open.
+    </p>
+    <form @submit.prevent="login.run()">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" v-model="username" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          v-model="password"
+          type="password"
+          autocomplete="current-password"
+          required
         />
-      </form>
-      <p class="muted">No account? <RouterLink to="/register">Create one</RouterLink></p>
-    </div>
-  </div>
+      </div>
+      <p v-if="login.error.value" class="notice error" role="alert">{{ login.error.value }}</p>
+      <AsyncButton
+        type="submit"
+        class="full"
+        :loading="login.loading.value"
+        label="Sign in"
+        loading-label="Signing in…"
+      />
+    </form>
+    <p class="switch">New here? <RouterLink to="/register">Create an account</RouterLink></p>
+  </AuthShell>
 </template>
 
 <style scoped>
-button {
+.full {
   width: 100%;
+}
+
+.switch {
+  margin: 1.25rem 0 0;
 }
 </style>

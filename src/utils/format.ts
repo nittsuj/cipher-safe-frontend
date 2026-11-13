@@ -28,3 +28,17 @@ export function downloadBlob(blob: Blob, filename: string): void {
   anchor.remove()
   URL.revokeObjectURL(url)
 }
+
+export function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  ID_CARD: 'ID & insurance',
+  DOCUMENT: 'Medical document',
+  VIDEO: 'Medical video',
+}
+
+export function categoryLabel(value: string): string {
+  return CATEGORY_LABELS[value] ?? value
+}

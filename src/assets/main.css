@@ -1,176 +1,358 @@
+@import '@fontsource/atkinson-hyperlegible-next/400.css';
+@import '@fontsource/atkinson-hyperlegible-next/600.css';
+@import '@fontsource/atkinson-hyperlegible-next/800.css';
+
+/*
+ * Cipher Safe: a patient's folder of medical records.
+ * Pale clinical sage, white sheets, one surgical-teal accent. Amber is
+ * reserved for health data; red for destructive actions only.
+ */
 :root {
-  --bg: #0f1420;
-  --surface: #1a2130;
-  --surface-2: #232c3d;
-  --border: #32405a;
-  --text: #e7edf7;
-  --muted: #93a1bd;
-  --primary: #4f8cff;
-  --primary-hover: #3d7bf0;
-  --danger: #ef5b6b;
-  --success: #35c98a;
-  --radius: 10px;
-  color-scheme: dark;
+  --bg: #edf2ef;
+  --sheet: #ffffff;
+  --sheet-2: #f5f8f6;
+  --line: #d3ddd8;
+  --line-strong: #a9b9b2;
+  --ink: #17302a;
+  --ink-2: #4c625c;
+  --accent: #0e6e66;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcefeb;
+  --health: #9a5b00;
+  --health-soft: #fbefdc;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --ok: #1d7a46;
+
+  /* Folder-tab colours per record category. */
+  --tab-id: #3d6fb6;
+  --tab-doc: #0e6e66;
+  --tab-video: #8a4fb0;
+
+  /* Chart series: AES / DES / RC4, fixed order (validated palette). */
+  --series-aes: #2a78d6;
+  --series-des: #eb6834;
+  --series-rc4: #1baf7a;
+
+  --radius-sheet: 14px;
+  --radius-control: 8px;
+  --focus: 0 0 0 3px #f5b84a;
+  --font: 'Atkinson Hyperlegible Next', 'Segoe UI', sans-serif;
+  color-scheme: light;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font);
+  font-size: 1.0625rem;
+  line-height: 1.55;
   background: var(--bg);
-  color: var(--text);
-  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* Type scale: 1.25 ratio from 17px. */
+h1 {
+  font-size: 2.0625rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0 0 0.4rem;
+}
+
+h2 {
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1.25;
+  margin: 0 0 0.75rem;
+}
+
+h3 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+p {
+  margin: 0 0 0.75rem;
+  max-width: 68ch;
 }
 
 a {
-  color: var(--primary);
+  color: var(--accent);
+  text-underline-offset: 0.18em;
 }
 
-h1,
-h2,
-h3 {
-  line-height: 1.25;
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: 4px;
 }
 
-.container {
-  max-width: 1000px;
+.page {
+  max-width: 1080px;
   margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.page-head {
+  margin-bottom: 1.75rem;
+}
+
+.lede {
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+}
+
+.sheet {
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sheet);
   padding: 1.5rem;
 }
 
-.narrow {
-  max-width: 420px;
-  margin-top: 3rem;
+.muted {
+  color: var(--ink-2);
 }
 
-.field {
-  margin-bottom: 1rem;
+.small {
+  font-size: 0.9rem;
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-}
-
-label {
+/* Forms */
+label,
+.label {
   display: block;
-  font-size: 0.85rem;
-  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.95rem;
   margin-bottom: 0.35rem;
 }
 
+.hint {
+  display: block;
+  font-weight: 400;
+  color: var(--ink-2);
+  font-size: 0.875rem;
+}
+
 input,
-select {
+select,
+textarea {
   width: 100%;
-  padding: 0.55rem 0.7rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
+  min-height: 2.75rem;
+  padding: 0.6rem 0.75rem;
   font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-control);
 }
 
-input:focus,
-select:focus {
-  outline: none;
-  border-color: var(--primary);
+textarea {
+  min-height: 5.5rem;
+  resize: vertical;
 }
 
-button {
-  padding: 0.55rem 1rem;
-  background: var(--primary);
-  color: white;
-  border: none;
-  border-radius: 8px;
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+  border-radius: var(--radius-control);
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.field {
+  margin-bottom: 1.1rem;
+}
+
+/* Buttons */
+button,
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 1.1rem;
   font: inherit;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-control);
   cursor: pointer;
+  text-decoration: none;
 }
 
 button:hover:not(:disabled) {
-  background: var(--primary-hover);
+  background: #0a5953;
+  border-color: #0a5953;
 }
 
 button:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 button.secondary {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--ink);
+  background: var(--sheet);
+  border-color: var(--line-strong);
 }
 
 button.secondary:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: var(--sheet-2);
+  border-color: var(--ink-2);
+}
+
+button.quiet {
+  color: var(--accent);
+  background: transparent;
+  border-color: transparent;
+  padding-inline: 0.5rem;
+}
+
+button.quiet:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: transparent;
 }
 
 button.danger {
-  background: transparent;
-  border: 1px solid var(--danger);
   color: var(--danger);
+  background: var(--sheet);
+  border-color: currentColor;
 }
 
 button.danger:hover:not(:disabled) {
-  background: rgba(239, 91, 107, 0.12);
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
-.row {
+/* Messages */
+.notice {
   display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-control);
+  border-left: 4px solid;
+  margin: 0 0 1rem;
 }
 
-.row > * {
-  flex: 1;
+.notice.error {
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
-.grid {
-  display: grid;
-  gap: 1rem;
+.notice.ok {
+  background: var(--accent-soft);
+  border-color: var(--ok);
 }
 
-.muted {
-  color: var(--muted);
+.notice.info {
+  background: var(--sheet-2);
+  border-color: var(--line-strong);
 }
 
-.error {
-  color: var(--danger);
-  font-size: 0.9rem;
+.health-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--health);
+  background: var(--health-soft);
+  padding: 0.05rem 0.5rem;
+  border-radius: 99px;
+  vertical-align: middle;
 }
 
-.success {
-  color: var(--success);
-  font-size: 0.9rem;
-}
-
+/* Tables (technical details and chart table views) */
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
 }
 
 th,
 td {
   text-align: left;
-  padding: 0.5rem 0.6rem;
-  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--line);
 }
 
 th {
-  color: var(--muted);
   font-weight: 600;
+  color: var(--ink-2);
 }
 
-code {
-  background: var(--surface-2);
-  padding: 0.1rem 0.35rem;
-  border-radius: 5px;
-  font-size: 0.85em;
+td.num,
+th.num {
+  text-align: right;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+code,
+.key {
+  font-family: ui-monospace, 'Cascadia Mono', 'Fira Code', monospace;
+}
+
+details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 0.4rem 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 1rem;
+  }
+
+  h1 {
+    font-size: 1.65rem;
+  }
+
+  .page {
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  .sheet {
+    padding: 1.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

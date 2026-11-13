@@ -4,109 +4,220 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import AsyncButton from '@/components/AsyncButton.vue'
 import { personalDataApi } from '@/api/cipherSafe'
 import { useAsyncAction } from '@/composables/useAsyncAction'
-import { ALGORITHMS, PII_FIELDS, type Algorithm } from '@/types/api'
+import { BLOOD_TYPES, PII_FIELDS, PROFILE_GROUPS, type ProfileField } from '@/types/api'
+import { formatDate } from '@/utils/format'
 
-const algorithm = ref<Algorithm>('AES')
 const form = reactive<Record<string, string>>(
   Object.fromEntries(PII_FIELDS.map((field) => [field.name, ''])),
 )
-const hasStoredData = ref(false)
-const message = ref('')
+const updatedAt = ref<string | null>(null)
+const saved = ref(false)
 
 const load = useAsyncAction(async () => {
-  const data = await personalDataApi.get(algorithm.value)
+  const data = await personalDataApi.get('AES')
   for (const field of PII_FIELDS) form[field.name] = data.fields[field.name] ?? ''
-  hasStoredData.value = Object.keys(data.fields).length > 0
-}, 'Could not load the patient profile.')
+  updatedAt.value = Object.keys(data.fields).length ? data.updated_at : null
+}, 'Could not open your profile.')
 
 const save = useAsyncAction(async () => {
+  saved.value = false
   const fields: Record<string, string> = {}
   for (const [name, value] of Object.entries(form)) {
-    if (value !== '') fields[name] = value
+    if (value.trim() !== '') fields[name] = value.trim()
   }
-  await personalDataApi.update(fields)
-  hasStoredData.value = true
-  message.value = 'Profile saved (encrypted with AES, DES and RC4).'
-}, 'Could not save the patient profile.')
+  const data = await personalDataApi.update(fields)
+  updatedAt.value = data.updated_at
+  saved.value = true
+}, 'Could not save your profile.')
 
+/** Digits-only fields: strip anything else as the user types. */
+function onDigits(field: ProfileField, event: Event) {
+  const input = event.target as HTMLInputElement
+  form[field.name] = input.value.replace(/\D/g, '').slice(0, field.digits)
+  input.value = form[field.name]!
+}
+
+function digitsInvalid(field: ProfileField) {
+  const value = form[field.name] ?? ''
+  return field.kind === 'digits' && value !== '' && value.length !== field.digits
+}
+
+const hasInvalid = computed(() => PII_FIELDS.some(digitsInvalid))
 const error = computed(() => load.error.value || save.error.value)
 
-onMounted(() => {
-  load.run()
-})
+onMounted(() => load.run())
 </script>
 
 <template>
-  <div class="container">
-    <h1>Patient profile</h1>
-    <p class="muted">
-      Identity and medical details a new clinic usually asks for. Fields marked
-      <span class="tag">health</span> are specific personal data under UU PDP Art. 4(2) and special-
-      category data under GDPR Art. 9. The whole profile is stored as three separate ciphertexts (AES,
-      DES and RC4) with an integrity tag; nothing is kept in plaintext. Saving replaces the profile.
-    </p>
+  <div class="page narrow-page">
+    <header class="page-head">
+      <h1>Your profile</h1>
+      <p class="lede">What a new clinic asks for at registration, kept in one place.</p>
+      <p v-if="updatedAt" class="muted small">Last saved {{ formatDate(updatedAt) }}</p>
+    </header>
 
-    <div class="card">
-      <div class="row">
-        <div>
-          <label for="algorithm">Decrypt / read using</label>
-          <select id="algorithm" v-model="algorithm" @change="load.run()">
-            <option v-for="option in ALGORITHMS" :key="option" :value="option">{{ option }}</option>
-          </select>
-        </div>
-        <div class="action">
-          <AsyncButton
-            variant="secondary"
-            :loading="load.loading.value"
-            label="Load"
-            loading-label="Loading..."
-            @click="load.run()"
-          />
-        </div>
-      </div>
-    </div>
+    <p v-if="load.loading.value" class="muted">Opening your profile…</p>
 
-    <form class="card" @submit.prevent="save.run()">
-      <div class="grid">
-        <div v-for="field in PII_FIELDS" :key="field.name">
-          <label :for="field.name"
-            >{{ field.label }} <span v-if="field.health" class="tag">health</span></label
+    <form v-else class="profile" novalidate @submit.prevent="save.run()">
+      <fieldset
+        v-for="group in PROFILE_GROUPS"
+        :key="group.title"
+        class="sheet group"
+        :class="{ health: group.health }"
+      >
+        <legend>
+          <h2>{{ group.title }}</h2>
+        </legend>
+        <p v-if="group.health" class="health-note small">
+          <span class="health-mark">Health data</span>
+          Protected as sensitive data under UU PDP and GDPR. Leave anything blank you'd rather not
+          keep here.
+        </p>
+
+        <div class="fields">
+          <div
+            v-for="field in group.fields"
+            :key="field.name"
+            class="field"
+            :class="{ wide: field.kind === 'textarea' }"
           >
-          <input :id="field.name" v-model="form[field.name]" :type="field.type ?? 'text'" />
+            <label :for="field.name">
+              {{ field.label }}
+              <span v-if="field.kind === 'digits'" class="hint">{{ field.digits }} digits</span>
+            </label>
+
+            <select v-if="field.kind === 'blood'" :id="field.name" v-model="form[field.name]">
+              <option value="">Not sure</option>
+              <option v-for="type in BLOOD_TYPES" :key="type" :value="type">{{ type }}</option>
+            </select>
+
+            <textarea
+              v-else-if="field.kind === 'textarea'"
+              :id="field.name"
+              v-model="form[field.name]"
+              :placeholder="field.placeholder"
+              rows="3"
+            />
+
+            <input
+              v-else-if="field.kind === 'digits'"
+              :id="field.name"
+              :value="form[field.name]"
+              inputmode="numeric"
+              autocomplete="off"
+              :maxlength="field.digits"
+              :aria-invalid="digitsInvalid(field)"
+              :aria-describedby="`${field.name}-err`"
+              class="key"
+              @input="onDigits(field, $event)"
+            />
+
+            <input
+              v-else
+              :id="field.name"
+              v-model="form[field.name]"
+              :type="field.kind === 'date' ? 'date' : field.kind === 'tel' ? 'tel' : 'text'"
+              :placeholder="field.placeholder"
+            />
+
+            <p v-if="digitsInvalid(field)" :id="`${field.name}-err`" class="field-err small">
+              {{ form[field.name]!.length }} of {{ field.digits }} digits
+            </p>
+          </div>
         </div>
+      </fieldset>
+
+      <div class="save-bar">
+        <p v-if="error" class="notice error" role="alert">{{ error }}</p>
+        <p v-else-if="saved" class="notice ok" role="status">Profile saved.</p>
+        <AsyncButton
+          type="submit"
+          :loading="save.loading.value"
+          :disabled="hasInvalid"
+          label="Save profile"
+          loading-label="Encrypting and saving…"
+        />
       </div>
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="message" class="success">{{ message }}</p>
-      <p v-if="!hasStoredData" class="muted">No profile stored yet.</p>
-      <AsyncButton
-        type="submit"
-        :loading="save.loading.value"
-        label="Save (encrypt with all three)"
-        loading-label="Saving..."
-      />
     </form>
   </div>
 </template>
 
 <style scoped>
-.card {
-  margin-bottom: 1rem;
+.narrow-page {
+  max-width: 820px;
 }
 
-.action {
+.profile {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.group {
+  margin: 0;
+  min-width: 0;
+}
+
+.group legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+}
+
+.group legend + * {
+  clear: both;
+}
+
+.group.health {
+  border-left: 5px solid var(--health);
+}
+
+.health-note {
+  color: var(--ink-2);
+}
+
+.health-note .health-mark {
+  margin-right: 0.4rem;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 1.25rem;
+}
+
+.field.wide {
+  grid-column: 1 / -1;
+}
+
+.field label .hint {
+  display: inline;
+  margin-left: 0.35rem;
+}
+
+.field-err {
+  color: var(--danger);
+  margin: 0.3rem 0 0;
+}
+
+.save-bar {
+  position: sticky;
+  bottom: 0;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1rem 0;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
 }
 
-.tag {
-  font-size: 0.75em;
-  padding: 0 0.35em;
-  border-radius: 4px;
-  background: var(--border);
+.save-bar .notice {
+  margin: 0;
+  flex: 1;
 }
 
-.grid {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  margin-bottom: 1rem;
+@media (max-width: 600px) {
+  .fields {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
