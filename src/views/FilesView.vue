@@ -1,207 +1,374 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import AsyncButton from '@/components/AsyncButton.vue'
+import RecordDrawer from '@/components/RecordDrawer.vue'
 import { useFilesStore } from '@/stores/files'
-import {
-  FILE_CATEGORIES,
-  MODE_FOR,
-  type Algorithm,
-  type FileCategory,
-  type StoredFile,
-} from '@/types/api'
-import { downloadBlob, formatBytes, formatDate, formatMs } from '@/utils/format'
+import { FILE_CATEGORIES, type FileCategory, type StoredFile } from '@/types/api'
+import { categoryLabel, formatBytes, formatDay } from '@/utils/format'
 
 const store = useFilesStore()
-const message = ref('')
-const fileInput = ref<HTMLInputElement | null>(null)
 
-const upload = reactive<{ file: File | null; category: FileCategory }>({
-  file: null,
-  category: 'DOCUMENT',
-})
-function categoryLabel(value: FileCategory): string {
-  return FILE_CATEGORIES.find((item) => item.value === value)?.label ?? value
+const filter = ref<FileCategory | 'ALL'>('ALL')
+const visible = computed(() =>
+  filter.value === 'ALL' ? store.items : store.items.filter((f) => f.category === filter.value),
+)
+const countFor = (value: FileCategory) => store.items.filter((f) => f.category === value).length
+
+// Upload
+const fileInput = ref<HTMLInputElement | null>(null)
+const pending = ref<File | null>(null)
+const category = ref<FileCategory>('DOCUMENT')
+const dragging = ref(false)
+const uploaded = ref('')
+
+function pick(file: File | null | undefined) {
+  pending.value = file ?? null
+  uploaded.value = ''
+  if (file?.type.startsWith('video/')) category.value = 'VIDEO'
 }
 
-function onFileChange(event: Event) {
-  const target = event.target as HTMLInputElement
-  upload.file = target.files?.[0] ?? null
+function onDrop(event: DragEvent) {
+  dragging.value = false
+  pick(event.dataTransfer?.files?.[0])
 }
 
 async function submitUpload() {
-  if (!upload.file) return
-  message.value = ''
-  const created = await store.upload(upload.file, upload.category)
+  if (!pending.value) return
+  const created = await store.upload(pending.value, category.value)
   if (created) {
-    message.value = `Uploaded "${created.original_name}" (encrypted with AES, DES and RC4).`
-    upload.file = null
+    uploaded.value = `${created.original_name} is saved and encrypted.`
+    pending.value = null
     if (fileInput.value) fileInput.value.value = ''
   }
 }
 
-async function handleDownload(file: StoredFile, algorithm: Algorithm) {
-  const result = await store.download(file.id, algorithm)
-  if (result) downloadBlob(result.blob, result.filename ?? file.original_name)
-}
-
-async function handleDownloadEncrypted(file: StoredFile, algorithm: Algorithm) {
-  const result = await store.downloadCiphertext(file.id, algorithm)
-  if (result) downloadBlob(result.blob, result.filename ?? `record-${file.id}-${algorithm}.enc`)
-}
-
-async function handleRemove(file: StoredFile) {
-  if (confirm(`Delete "${file.original_name}"?`)) await store.remove(file.id)
-}
+// Drawer
+const openId = ref<number | null>(null)
+const openFile = computed<StoredFile | null>(
+  () => store.items.find((f) => f.id === openId.value) ?? null,
+)
 
 onMounted(store.load)
 </script>
 
 <template>
-  <div class="container">
-    <h1>My medical records</h1>
-    <p class="muted">
-      Your KTP / BPJS card scans, lab results, referral letters and medical videos, ready to show at
-      your next appointment. Each upload is encrypted with AES-{{ MODE_FOR.AES }}, DES-{{
-        MODE_FOR.DES
-      }} and RC4, protected by an integrity tag, and only you can download it back.
-    </p>
+  <div class="page">
+    <header class="page-head">
+      <h1>Your records</h1>
+      <p class="lede">
+        Bring your history to the next appointment: ID and BPJS cards, lab results, referral letters
+        and scan videos. Only you can open them.
+      </p>
+    </header>
 
-    <form class="card" @submit.prevent="submitUpload">
-      <h3>Upload</h3>
-      <div class="grid upload-grid">
-        <div>
-          <label for="file-input">File</label>
-          <input id="file-input" ref="fileInput" type="file" @change="onFileChange" />
-        </div>
-        <div>
-          <label for="category">Category</label>
-          <select id="category" v-model="upload.category">
-            <option v-for="item in FILE_CATEGORIES" :key="item.value" :value="item.value">
-              {{ item.label }}
-            </option>
-          </select>
-        </div>
+    <form
+      class="upload sheet"
+      :class="{ dragging }"
+      @submit.prevent="submitUpload"
+      @dragover.prevent="dragging = true"
+      @dragleave="dragging = false"
+      @drop.prevent="onDrop"
+    >
+      <div class="drop">
+        <label for="file-input" class="drop-label">
+          <span class="drop-title">{{ pending ? pending.name : 'Add a record' }}</span>
+          <span class="hint">
+            {{ pending ? formatBytes(pending.size) : 'Drop a file here, or choose one. Up to 128 MB.' }}
+          </span>
+        </label>
+        <input
+          id="file-input"
+          ref="fileInput"
+          type="file"
+          class="file-input"
+          @change="pick(($event.target as HTMLInputElement).files?.[0])"
+        />
       </div>
+
+      <fieldset class="kinds">
+        <legend class="label">What is it?</legend>
+        <label v-for="item in FILE_CATEGORIES" :key="item.value" class="kind" :data-cat="item.value">
+          <input v-model="category" type="radio" name="category" :value="item.value" />
+          <span>
+            {{ item.label }}
+            <span class="hint">{{ item.hint }}</span>
+          </span>
+        </label>
+      </fieldset>
+
       <AsyncButton
         type="submit"
         :loading="store.uploading"
-        :disabled="!upload.file"
-        label="Encrypt & upload"
-        loading-label="Encrypting..."
+        :disabled="!pending"
+        label="Save record"
+        loading-label="Encrypting and saving…"
       />
     </form>
 
-    <p v-if="store.error" class="error">{{ store.error }}</p>
-    <p v-if="message" class="success">{{ message }}</p>
+    <p v-if="store.error" class="notice error" role="alert">{{ store.error }}</p>
+    <p v-if="uploaded" class="notice ok" role="status">{{ uploaded }}</p>
 
-    <div v-if="store.loading" class="muted">Loading files...</div>
-    <div v-else-if="store.items.length === 0" class="card muted">No files yet.</div>
-
-    <div v-for="file in store.items" :key="file.id" class="card">
-      <div class="file-head">
-        <div>
-          <strong>{{ file.original_name }}</strong>
-          <div class="muted small">
-            {{ categoryLabel(file.category) }} | {{ formatBytes(file.plaintext_size) }} | {{ formatDate(file.created_at) }}
-          </div>
-        </div>
-        <button class="danger" @click="handleRemove(file)">Delete</button>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Algorithm</th>
-            <th>Mode</th>
-            <th>Ciphertext</th>
-            <th>Key derivation</th>
-            <th>Cipher</th>
-            <th>HMAC</th>
-            <th>This copy</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="ciphertext in file.ciphertexts" :key="ciphertext.algorithm">
-            <td>{{ ciphertext.algorithm }}</td>
-            <td>{{ ciphertext.mode || '-' }}</td>
-            <td>{{ formatBytes(ciphertext.ciphertext_size) }}</td>
-            <td>{{ formatMs(ciphertext.key_derivation_ms) }}</td>
-            <td>{{ formatMs(ciphertext.cipher_ms) }}</td>
-            <td>{{ formatMs(ciphertext.mac_ms) }}</td>
-            <td class="row-actions">
-              <button
-                :disabled="store.busyFileId === file.id"
-                @click="handleDownload(file, ciphertext.algorithm)"
-              >
-                Download
-              </button>
-              <button
-                class="secondary"
-                :disabled="store.busyFileId === file.id"
-                title="The stored bytes, not decrypted"
-                @click="handleDownloadEncrypted(file, ciphertext.algorithm)"
-              >
-                Encrypted
-              </button>
-              <button
-                class="secondary"
-                :disabled="store.busyFileId === file.id"
-                @click="store.benchmark(file.id, ciphertext.algorithm)"
-              >
-                Benchmark
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div v-if="store.benchmarks[file.id]" class="benchmark">
-        <strong>{{ store.benchmarks[file.id]!.algorithm }}</strong> benchmark over
-        {{ store.benchmarks[file.id]!.runs }} runs: min
-        {{ formatMs(store.benchmarks[file.id]!.min_ms) }}, mean
-        {{ formatMs(store.benchmarks[file.id]!.mean_ms) }}, max
-        {{ formatMs(store.benchmarks[file.id]!.max_ms) }}
-      </div>
+    <div v-if="store.items.length" class="filters" role="group" aria-label="Filter records">
+      <button
+        :class="filter === 'ALL' ? '' : 'secondary'"
+        :aria-pressed="filter === 'ALL'"
+        @click="filter = 'ALL'"
+      >
+        All <span class="count">{{ store.items.length }}</span>
+      </button>
+      <button
+        v-for="item in FILE_CATEGORIES"
+        :key="item.value"
+        :class="filter === item.value ? '' : 'secondary'"
+        :aria-pressed="filter === item.value"
+        @click="filter = item.value"
+      >
+        {{ item.label }} <span class="count">{{ countFor(item.value) }}</span>
+      </button>
     </div>
+
+    <div v-if="store.loading && !store.items.length" class="grid" aria-busy="true">
+      <div v-for="i in 3" :key="i" class="folder skeleton" />
+    </div>
+
+    <div v-else-if="!store.items.length" class="empty sheet">
+      <h2>No records yet</h2>
+      <p class="muted">
+        Start with what clinics ask for most: a photo of your KTP and BPJS card, then your latest lab
+        result.
+      </p>
+      <button @click="fileInput?.click()">Choose a file</button>
+    </div>
+
+    <ul v-else class="grid">
+      <li v-for="file in visible" :key="file.id">
+        <button class="folder" :data-cat="file.category" @click="openId = file.id">
+          <span class="tab">{{ categoryLabel(file.category) }}</span>
+          <span class="folder-body">
+            <span class="name">{{ file.original_name }}</span>
+            <span class="meta">
+              <span>{{ formatBytes(file.plaintext_size) }}</span>
+              <span>{{ formatDay(file.created_at) }}</span>
+            </span>
+          </span>
+        </button>
+      </li>
+    </ul>
+
+    <RecordDrawer :file="openFile" @close="openId = null" />
   </div>
 </template>
 
 <style scoped>
-.upload-grid {
-  grid-template-columns: 2fr 1fr;
-  margin-bottom: 1rem;
+.upload {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  gap: 1.25rem;
+  align-items: end;
+  margin-bottom: 1.25rem;
 }
 
-.file-head {
+.upload.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.drop {
+  position: relative;
+  align-self: stretch;
+}
+
+.drop-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  min-height: 6.5rem;
+  margin: 0;
+  padding: 1rem 1.25rem;
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-sheet);
+  cursor: pointer;
+}
+
+.drop-label:hover {
+  border-color: var(--accent);
+}
+
+.drop-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  min-height: 0;
+}
+
+.drop:focus-within .drop-label {
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+
+.kinds {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.kind {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-control);
+  border-left: 4px solid var(--cat);
+  background: var(--sheet-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kind input {
+  width: auto;
+  min-height: 0;
+  margin-top: 0.3rem;
+  accent-color: var(--accent);
+}
+
+.kind .hint {
+  display: inline;
+  margin-left: 0.3rem;
+}
+
+[data-cat='ID_CARD'] {
+  --cat: var(--tab-id);
+}
+
+[data-cat='DOCUMENT'] {
+  --cat: var(--tab-doc);
+}
+
+[data-cat='VIDEO'] {
+  --cat: var(--tab-video);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.75rem 0 1rem;
+}
+
+.filters button {
+  min-height: 2.4rem;
+  padding-block: 0.3rem;
+}
+
+.count {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 1.75rem 1.25rem;
+}
+
+/* The folder: a coloured tab on top of a white sheet. */
+.folder {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-height: 9rem;
+  padding: 0;
+  margin-top: 1.4rem;
+  text-align: left;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-top: 5px solid var(--cat);
+  border-radius: 0 var(--radius-sheet) var(--radius-sheet) var(--radius-sheet);
+  font-weight: 400;
+}
+
+.folder:hover:not(:disabled) {
+  background: var(--sheet);
+  border-color: var(--line-strong);
+  border-top-color: var(--cat);
+}
+
+.folder:focus-visible {
+  border-radius: 0 var(--radius-sheet) var(--radius-sheet) var(--radius-sheet);
+}
+
+.tab {
+  position: absolute;
+  bottom: 100%;
+  left: -1px;
+  max-width: 85%;
+  padding: 0.15rem 0.85rem 0.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--cat);
+  border-radius: 8px 8px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+}
+
+.name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meta {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.75rem;
-}
-
-.row-actions {
-  display: flex;
-  gap: 0.4rem;
-  white-space: nowrap;
-}
-
-.row-actions button {
-  padding: 0.25rem 0.6rem;
-  font-size: 0.85rem;
-}
-
-.small {
-  font-size: 0.85rem;
-}
-
-.benchmark {
-  margin-top: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--surface-2);
-  border-radius: 8px;
+  color: var(--ink-2);
   font-size: 0.9rem;
+}
+
+.skeleton {
+  --cat: var(--line);
+  background: var(--sheet-2);
+}
+
+.empty {
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 860px) {
+  .upload {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

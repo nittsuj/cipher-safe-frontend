@@ -6,9 +6,9 @@ export const MODE_FOR: Record<(typeof ALGORITHMS)[number], string> = {
   RC4: '',
 }
 export const FILE_CATEGORIES = [
-  { value: 'ID_CARD', label: 'Identity / insurance card (KTP, BPJS)' },
-  { value: 'DOCUMENT', label: 'Medical document (lab result, referral, medication log)' },
-  { value: 'VIDEO', label: 'Medical video (ultrasound, echo, endoscopy)' },
+  { value: 'ID_CARD', label: 'ID & insurance', hint: 'KTP, BPJS card' },
+  { value: 'DOCUMENT', label: 'Medical document', hint: 'Lab result, referral, medication log' },
+  { value: 'VIDEO', label: 'Medical video', hint: 'Ultrasound, echo, endoscopy' },
 ] as const
 
 export type Algorithm = (typeof ALGORITHMS)[number]
@@ -102,10 +102,6 @@ export interface BenchmarkResult {
   mean_ms: number
 }
 
-/**
- * The patient profile. `health` marks UU PDP Art. 4(2) / GDPR Art. 9 health
- * data; everything is encrypted either way.
- */
 /**
  * The patient profile. `health` marks UU PDP Art. 4(2) / GDPR Art. 9 health
  * data; everything is encrypted either way.
