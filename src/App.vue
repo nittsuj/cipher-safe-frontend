@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
@@ -6,11 +7,15 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 const router = useRouter()
 
-const links = [
-  { to: '/files', label: 'Records' },
-  { to: '/personal-data', label: 'Profile' },
-  { to: '/analysis', label: 'Cipher analysis' },
-]
+const links = computed(() =>
+  auth.isDoctor
+    ? [{ to: '/shared', label: 'Shared with me' }]
+    : [
+        { to: '/files', label: 'Records' },
+        { to: '/personal-data', label: 'Profile' },
+        { to: '/analysis', label: 'Cipher analysis' },
+      ],
+)
 
 async function handleLogout() {
   await auth.logout()
@@ -22,7 +27,7 @@ async function handleLogout() {
   <a class="skip" href="#main">Skip to content</a>
   <header class="topbar">
     <div class="topbar-inner">
-      <RouterLink to="/files" class="brand">
+      <RouterLink :to="auth.isDoctor ? '/shared' : '/files'" class="brand">
         <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
           <path d="M4 9a3 3 0 0 1 3-3h6l3 3h9a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z" />
           <rect x="13" y="15" width="6" height="6" rx="1.2" class="lock" />
@@ -36,7 +41,10 @@ async function handleLogout() {
       </nav>
 
       <div v-if="auth.isAuthenticated" class="session">
-        <span class="who">{{ auth.user?.username }}</span>
+        <span class="who">
+          {{ auth.user?.username }}
+          <span class="role">{{ auth.isDoctor ? 'Doctor' : 'Patient' }}</span>
+        </span>
         <button class="secondary" @click="handleLogout">Sign out</button>
       </div>
     </div>
@@ -141,6 +149,15 @@ async function handleLogout() {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.role {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  padding: 0 0.5rem;
 }
 
 @media (max-width: 720px) {

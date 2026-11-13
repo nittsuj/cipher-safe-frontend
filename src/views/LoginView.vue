@@ -16,7 +16,8 @@ const password = ref('')
 
 const login = useAsyncAction(async () => {
   await auth.login(username.value, password.value)
-  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/files'
+  const fallback = auth.isDoctor ? '/shared' : '/files'
+  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : fallback
   router.push(redirect)
 }, 'Could not sign in. Check your connection and try again.')
 </script>

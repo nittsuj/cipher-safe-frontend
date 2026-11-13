@@ -4,6 +4,7 @@ import type {
   BenchmarkResult,
   CreatedShare,
   FileShare,
+  ReceivedShare,
   Role,
   DownloadEvent,
   FileCategory,
@@ -132,5 +133,15 @@ export const sharesApi = {
 
   revoke(shareId: number): Promise<void> {
     return requestJson<void>(`/api/shares/${shareId}/`, { method: 'DELETE' })
+  },
+
+  received(): Promise<ReceivedShare[]> {
+    return requestJson<ReceivedShare[]>('/api/shares/received/')
+  },
+
+  open(shareId: number, key: string): Promise<{ blob: Blob; filename: string | null }> {
+    return requestBlob(withQuery(`/api/shares/received/${shareId}/open/`, { inline: 1 }), {
+      headers: { 'X-Share-Key': key },
+    })
   },
 }

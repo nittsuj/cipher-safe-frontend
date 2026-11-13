@@ -184,6 +184,16 @@ export interface CreatedShare extends FileShare {
   share_key: string
 }
 
+export interface ReceivedShare {
+  id: number
+  patient: string
+  category: FileCategory
+  plaintext_size: number
+  created_at: string
+  expires_at: string
+  access_count: number
+}
+
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
 
 /** One bar in an algorithm comparison chart. */
