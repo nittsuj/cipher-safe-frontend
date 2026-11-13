@@ -22,7 +22,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="container">
+  <div class="page">
     <h1>Analysis</h1>
     <p class="muted">
       Running time per algorithm, including key derivation (PBKDF2, 600k rounds), the cipher and the
@@ -39,10 +39,10 @@ onMounted(() => {
       />
     </div>
 
-    <p v-if="load.error.value" class="error">{{ load.error.value }}</p>
+    <p v-if="load.error.value" class="notice error" role="alert">{{ load.error.value }}</p>
 
     <template v-if="timings">
-      <div class="card">
+      <div class="sheet">
         <h3>Encryption (per stored ciphertext)</h3>
         <table>
           <thead>
@@ -68,7 +68,7 @@ onMounted(() => {
         </table>
       </div>
 
-      <div class="card">
+      <div class="sheet">
         <h3>Downloads</h3>
         <table>
           <thead>
@@ -96,7 +96,7 @@ onMounted(() => {
       </div>
     </template>
 
-    <div class="card">
+    <div class="sheet">
       <h3>Download history</h3>
       <table>
         <thead>
