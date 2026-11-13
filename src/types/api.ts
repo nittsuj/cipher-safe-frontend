@@ -162,3 +162,11 @@ export const PREVIEWABLE_TYPES = [
 ] as const
 
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
+
+/** One bar in an algorithm comparison chart. */
+export interface BarRow {
+  algorithm: Algorithm
+  value: number
+  /** Extra values for the tooltip and table view (e.g. min / max). */
+  details?: { label: string; value: string }[]
+}
