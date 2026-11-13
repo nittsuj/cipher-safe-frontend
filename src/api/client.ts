@@ -32,9 +32,17 @@ export class ApiError extends Error {
   }
 }
 
+/** A validation problem found in the browser; its message is shown as-is. */
+export class FormError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'FormError'
+  }
+}
+
 /** Turn any thrown value into a display string. */
 export function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof ApiError ? error.message : fallback
+  return error instanceof ApiError || error instanceof FormError ? error.message : fallback
 }
 
 /** Append query parameters, skipping empty values and encoding correctly. */
@@ -143,6 +151,22 @@ export async function requestBlob(
   if (!response.ok) throw await toApiError(response)
 
   const disposition = response.headers.get('Content-Disposition') ?? ''
-  const match = /filename="?([^";]+)"?/.exec(disposition)
-  return { blob: await response.blob(), filename: match?.[1] ?? null }
+  return { blob: await response.blob(), filename: parseFilename(disposition) }
+}
+
+/**
+ * Read the filename from Content-Disposition. Non-ASCII names arrive only as
+ * RFC 5987 `filename*=utf-8''...`, which takes precedence when present.
+ */
+export function parseFilename(disposition: string): string | null {
+  const extended = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(disposition)
+  if (extended?.[2]) {
+    try {
+      return decodeURIComponent(extended[2].trim())
+    } catch {
+      // fall through to the plain parameter
+    }
+  }
+  const plain = /filename\s*=\s*"([^"]*)"|filename\s*=\s*([^;]+)/i.exec(disposition)
+  return plain ? (plain[1] ?? plain[2]?.trim() ?? null) : null
 }
