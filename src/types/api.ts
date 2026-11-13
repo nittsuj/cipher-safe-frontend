@@ -1,7 +1,7 @@
 export const ALGORITHMS = ['AES', 'DES', 'RC4'] as const
 /** Mode used by the server for each cipher (fixed; not chosen per upload). */
 export const MODE_FOR: Record<(typeof ALGORITHMS)[number], string> = {
-  AES: 'CTR',
+  AES: 'GCM',
   DES: 'CTR',
   RC4: '',
 }
