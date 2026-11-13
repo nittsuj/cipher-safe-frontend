@@ -57,13 +57,30 @@ stored refresh token and retries the request, so the user is not interrupted.
 
 ## Setup
 
-Requires Node `^22.18 || >=24.12` and the backend running on
-`http://127.0.0.1:8000`.
+### 1. Install the tools
+
+- **Node** `^22.18 || >=24.12`
+- **pnpm**: `npm install -g pnpm`. The exact pnpm version is pinned in
+  `package.json` (`packageManager`), and pnpm switches to it automatically.
+- **The backend** running on `http://127.0.0.1:8000`; see the
+  `cipher-safe-backend` README (`docker compose up`).
+
+### 2. Install and run
 
 ```bash
-npm install
-npm run dev          # http://localhost:5173
+pnpm install         # installs exactly what pnpm-lock.yaml lists
+pnpm dev             # http://localhost:5173
 ```
+
+For the end-to-end tests, download the browsers once:
+
+```bash
+pnpm exec playwright install
+```
+
+### 3. Optional: `.env`
+
+Nothing has to be generated for the frontend; it has no secrets.
 
 During development, Vite proxies `/api` to the backend (see `vite.config.ts`),
 so no CORS configuration is needed. Override the target with `VITE_PROXY_TARGET`
@@ -79,13 +96,13 @@ VITE_API_BASE=            # empty = use the dev proxy / same-origin /api
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Dev server with hot reload + API proxy |
-| `npm run build` | Type-check and production build into `dist/` |
-| `npm run type-check` | `vue-tsc` only |
-| `npm run test:unit` | Vitest unit tests |
-| `npm run test:e2e` | Playwright smoke tests |
-| `npm run lint` | oxlint + ESLint (auto-fix) |
-| `npm run format` | Prettier |
+| `pnpm dev` | Dev server with hot reload + API proxy |
+| `pnpm build` | Type-check and production build into `dist/` |
+| `pnpm type-check` | `vue-tsc` only |
+| `pnpm test:unit` | Vitest unit tests |
+| `pnpm test:e2e` | Playwright smoke tests |
+| `pnpm lint` | oxlint + ESLint (auto-fix) |
+| `pnpm format` | Prettier |
 
 ## Layout
 
@@ -93,19 +110,20 @@ VITE_API_BASE=            # empty = use the dev proxy / same-origin /api
 src/
   api/          fetch client + typed endpoint wrappers
   assets/       global styles
+  components/   drawer, preview, share section, charts
   composables/  useAsyncAction (loading/error wrapper)
+  config/       UI settings: record categories, profile form layout
   router/       routes + auth guards
   stores/       Pinia stores (auth, files)
   types/        API types mirroring the DRF serializers
   utils/        formatting + download helpers
-  views/        Login, Register, PersonalData, Files, Analysis
+  views/        Login, Register, PersonalData, Files, Analysis, Shared
   __tests__/    unit tests
 e2e/            Playwright tests
 ```
 
 ## Known issue
 
-`npm audit` reports high-severity advisories in `braces` (via
-`@vue/eslint-config-typescript` -> `fast-glob` -> `micromatch`). `braces@3.0.3`
-is the latest release and has no patched version, and it is only used by the
-lint tooling; it is not part of the production bundle.
+`pnpm audit` reports two moderate advisories, in `glob` and `minimatch`. Both
+come in through the lint and test tooling only: `pnpm audit --prod` finds no
+vulnerabilities in what ships to the browser.
