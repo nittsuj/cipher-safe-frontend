@@ -1,14 +1,9 @@
 export const ALGORITHMS = ['AES', 'DES', 'RC4'] as const
-export const FILE_CATEGORIES = [
-  { value: 'ID_CARD', label: 'ID & insurance', hint: 'KTP, BPJS card' },
-  { value: 'DOCUMENT', label: 'Medical document', hint: 'Lab result, referral, medication log' },
-  { value: 'VIDEO', label: 'Medical video', hint: 'Ultrasound, echo, endoscopy' },
-] as const
 
 export type Role = 'PATIENT' | 'DOCTOR'
 
 export type Algorithm = (typeof ALGORITHMS)[number]
-export type FileCategory = (typeof FILE_CATEGORIES)[number]['value']
+export type FileCategory = 'ID_CARD' | 'DOCUMENT' | 'VIDEO'
 
 /** Credentials attached to every request. Everything is held in memory only. */
 export interface Credentials {
@@ -103,65 +98,6 @@ export interface BenchmarkResult {
   cipher_mean_ms: number
 }
 
-/**
- * The patient profile. `health` marks UU PDP Art. 4(2) / GDPR Art. 9 health
- * data; everything is encrypted either way.
- */
-export interface ProfileField {
-  name: string
-  label: string
-  kind?: 'text' | 'date' | 'textarea' | 'blood' | 'digits' | 'tel'
-  digits?: number
-  placeholder?: string
-  health?: boolean
-}
-
-export const PROFILE_GROUPS: { title: string; health?: boolean; fields: ProfileField[] }[] = [
-  {
-    title: 'Identity',
-    fields: [
-      { name: 'full_name', label: 'Full name' },
-      { name: 'date_of_birth', label: 'Date of birth', kind: 'date' },
-      { name: 'national_id', label: 'NIK', kind: 'digits', digits: 16 },
-      { name: 'bpjs_number', label: 'BPJS Kesehatan number', kind: 'digits', digits: 13 },
-    ],
-  },
-  {
-    title: 'Contact',
-    fields: [
-      { name: 'phone', label: 'Phone', kind: 'tel', placeholder: '08xx' },
-      { name: 'emergency_contact', label: 'Emergency contact', placeholder: 'Name and phone' },
-      { name: 'address', label: 'Address', kind: 'textarea' },
-    ],
-  },
-  {
-    title: 'Medical',
-    health: true,
-    fields: [
-      { name: 'blood_type', label: 'Blood type', kind: 'blood', health: true },
-      { name: 'allergies', label: 'Allergies', kind: 'textarea', placeholder: 'e.g. penicillin', health: true },
-      { name: 'chronic_conditions', label: 'Chronic conditions', kind: 'textarea', health: true },
-      { name: 'current_medications', label: 'Current medications', kind: 'textarea', health: true },
-    ],
-  },
-]
-
-export const PII_FIELDS: ProfileField[] = PROFILE_GROUPS.flatMap((group) => group.fields)
-
-/** Types the browser may render in the preview. Anything else (HTML, SVG...)
- * could run script, so it is offered as a download only. */
-export const PREVIEWABLE_TYPES = [
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
-  'video/mp4',
-  'video/webm',
-  'video/ogg',
-  'text/plain',
-] as const
-
 export interface FileShare {
   id: number
   file: number
@@ -187,8 +123,6 @@ export interface ReceivedShare {
   expires_at: string
   access_count: number
 }
-
-export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
 
 /** One bar in an algorithm comparison chart. */
 export interface BarRow {

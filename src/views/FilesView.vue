@@ -4,7 +4,8 @@ import { computed, onMounted, ref } from 'vue'
 import AsyncButton from '@/components/AsyncButton.vue'
 import RecordDrawer from '@/components/RecordDrawer.vue'
 import { useFilesStore } from '@/stores/files'
-import { FILE_CATEGORIES, type FileCategory, type StoredFile } from '@/types/api'
+import { FILE_CATEGORIES } from '@/config/records'
+import type { FileCategory, StoredFile } from '@/types/api'
 import { categoryLabel, formatBytes, formatDay } from '@/utils/format'
 
 const store = useFilesStore()

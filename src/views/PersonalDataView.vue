@@ -4,7 +4,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import AsyncButton from '@/components/AsyncButton.vue'
 import { personalDataApi } from '@/api/cipherSafe'
 import { useAsyncAction } from '@/composables/useAsyncAction'
-import { BLOOD_TYPES, PII_FIELDS, PROFILE_GROUPS, type ProfileField } from '@/types/api'
+import { BLOOD_TYPES, PII_FIELDS, PROFILE_GROUPS, type ProfileField } from '@/config/profile'
 import { formatDate } from '@/utils/format'
 
 const form = reactive<Record<string, string>>(
