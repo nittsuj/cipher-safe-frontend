@@ -1,10 +1,4 @@
 export const ALGORITHMS = ['AES', 'DES', 'RC4'] as const
-/** Mode used by the server for each cipher (fixed; not chosen per upload). */
-export const MODE_FOR: Record<(typeof ALGORITHMS)[number], string> = {
-  AES: 'GCM',
-  DES: 'CTR',
-  RC4: '',
-}
 export const FILE_CATEGORIES = [
   { value: 'ID_CARD', label: 'ID & insurance', hint: 'KTP, BPJS card' },
   { value: 'DOCUMENT', label: 'Medical document', hint: 'Lab result, referral, medication log' },
