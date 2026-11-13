@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
-import { PREVIEWABLE_TYPES } from '@/types/api'
+import { PREVIEWABLE_TYPES } from '@/config/records'
 import { downloadBlob } from '@/utils/format'
 
 /**

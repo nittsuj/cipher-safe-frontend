@@ -1,22 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 
 import AsyncButton from '@/components/AsyncButton.vue'
-import BenchmarkChart from '@/components/BenchmarkChart.vue'
+import CipherDetails from '@/components/CipherDetails.vue'
 import FilePreview from '@/components/FilePreview.vue'
-import { filesApi, sharesApi } from '@/api/cipherSafe'
+import ShareSection from '@/components/ShareSection.vue'
+import { filesApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { useFilesStore } from '@/stores/files'
-import type { Algorithm, CreatedShare, FileShare, StoredFile } from '@/types/api'
-import {
-  categoryLabel,
-  downloadBlob,
-  formatBytes,
-  formatDate,
-  formatMs,
-  formatUntil,
-} from '@/utils/format'
+import type { Algorithm, StoredFile } from '@/types/api'
+import { categoryLabel, downloadBlob, formatBytes, formatDate } from '@/utils/format'
 
 const props = defineProps<{ file: StoredFile | null }>()
 const emit = defineEmits<{ close: [] }>()
@@ -32,17 +26,12 @@ watch(
     if (id !== undefined) {
       reset()
       if (!dialog.value?.open) dialog.value?.showModal()
-      loadShares.run()
     } else dialog.value?.close()
   },
 )
 
 function reset() {
-  shares.value = []
-  created.value = null
-  doctor.value = ''
   confirmingDelete.value = false
-  copied.value = false
 }
 
 // Preview
@@ -70,54 +59,12 @@ const download = useAsyncAction(async (algorithm: Algorithm = 'AES') => {
   downloadBlob(result.blob, result.filename ?? props.file.original_name)
 }, 'Download failed.')
 
-const downloadEncrypted = useAsyncAction(async (algorithm: Algorithm) => {
-  if (!props.file) return
-  const result = await filesApi.downloadCiphertext(props.file.id, algorithm)
-  downloadBlob(result.blob, result.filename ?? `${props.file.original_name}.${algorithm}-encrypted`)
-}, 'Download failed.')
-
-// Sharing
-const shares = ref<FileShare[]>([])
-const doctor = ref('')
-const hours = ref(24)
-const created = ref<CreatedShare | null>(null)
-const copied = ref(false)
-
-const loadShares = useAsyncAction(async () => {
-  if (props.file) shares.value = await sharesApi.forFile(props.file.id)
-}, 'Could not load shares.')
-
-const share = useAsyncAction(async () => {
-  if (!props.file) return
-  created.value = await sharesApi.create(props.file.id, doctor.value.trim(), hours.value)
-  copied.value = false
-  doctor.value = ''
-  await loadShares.run()
-}, 'Could not share this record.')
-
-const revoke = useAsyncAction(async (id: number) => {
-  await sharesApi.revoke(id)
-  if (created.value?.id === id) created.value = null
-  await loadShares.run()
-}, 'Could not stop sharing.')
-
-async function copyKey() {
-  if (!created.value) return
-  await navigator.clipboard.writeText(created.value.share_key)
-  copied.value = true
-}
-
-const activeShares = computed(() => shares.value.filter((s) => s.active))
-
 // Delete
 const confirmingDelete = ref(false)
 async function remove() {
   if (!props.file) return
   if (await store.remove(props.file.id)) emit('close')
 }
-
-const benchmark = computed(() => (props.file ? store.benchmarks[props.file.id] : undefined))
-const busy = computed(() => props.file !== null && store.busyFileId === props.file.id)
 </script>
 
 <template>
@@ -148,113 +95,9 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
         </div>
         <p v-if="download.error.value" class="notice error">{{ download.error.value }}</p>
 
-        <section class="block">
-          <h3>Share with a doctor</h3>
-          <p class="muted small">
-            The doctor gets a separate copy, locked with a one-time key. Send them the key yourself, by
-            WhatsApp or in person. Without it they can't open anything.
-          </p>
+        <ShareSection :file-id="file.id" />
 
-          <div v-if="created" class="key-card" role="status">
-            <p class="small">Key for <strong>{{ created.doctor }}</strong>. This is the only time it's shown.</p>
-            <p class="key share-key">{{ created.share_key }}</p>
-            <button class="secondary" @click="copyKey">{{ copied ? 'Copied' : 'Copy key' }}</button>
-          </div>
-
-          <form class="share-form" @submit.prevent="share.run()">
-            <div>
-              <label for="doctor">Doctor's username</label>
-              <input id="doctor" v-model="doctor" autocomplete="off" required />
-            </div>
-            <div>
-              <label for="hours">Open for</label>
-              <select id="hours" v-model.number="hours">
-                <option :value="1">1 hour</option>
-                <option :value="24">1 day</option>
-                <option :value="72">3 days</option>
-                <option :value="168">1 week</option>
-              </select>
-            </div>
-            <AsyncButton
-              type="submit"
-              :loading="share.loading.value"
-              :disabled="!doctor.trim()"
-              label="Create key"
-              loading-label="Locking copy…"
-            />
-          </form>
-          <p v-if="share.error.value" class="notice error">{{ share.error.value }}</p>
-
-          <ul v-if="activeShares.length" class="shares">
-            <li v-for="item in activeShares" :key="item.id">
-              <span>
-                <strong>{{ item.doctor }}</strong>
-                <span class="muted small">
-                  closes {{ formatUntil(item.expires_at) }}, opened {{ item.access_count }}×
-                </span>
-              </span>
-              <button class="danger small" :disabled="revoke.loading.value" @click="revoke.run(item.id)">
-                Stop sharing
-              </button>
-            </li>
-          </ul>
-        </section>
-
-        <details class="block">
-          <summary>How it's protected</summary>
-          <p class="muted small">
-            Each record is stored three times, once per cipher, each with its own key from your
-            password. AES uses GCM, which detects any change by itself; DES and RC4 add an HMAC check.
-          </p>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Cipher</th>
-                  <th class="num">Key setup</th>
-                  <th class="num">Cipher</th>
-                  <th class="num">Integrity</th>
-                  <th><span class="visually-hidden">Encrypted copy</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="c in file.ciphertexts" :key="c.algorithm">
-                  <td>
-                    <strong>{{ c.algorithm }}</strong>
-                    <span class="muted small">{{ c.mode ? `-${c.mode}` : '' }}</span>
-                  </td>
-                  <td class="num">{{ formatMs(c.key_derivation_ms) }}</td>
-                  <td class="num">{{ formatMs(c.cipher_ms) }}</td>
-                  <td class="num">{{ c.mode === 'GCM' ? 'in GCM' : formatMs(c.mac_ms) }}</td>
-                  <td>
-                    <button
-                      class="quiet small"
-                      :disabled="downloadEncrypted.loading.value"
-                      :aria-label="`Download the ${c.algorithm} encrypted copy`"
-                      @click="downloadEncrypted.run(c.algorithm)"
-                    >
-                      Encrypted copy
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p v-if="downloadEncrypted.error.value" class="notice error">
-            {{ downloadEncrypted.error.value }}
-          </p>
-
-          <div class="bench">
-            <AsyncButton
-              variant="secondary"
-              :loading="busy"
-              label="Benchmark decryption (10 runs each)"
-              loading-label="Running AES, DES, RC4…"
-              @click="store.benchmark(file.id)"
-            />
-            <BenchmarkChart v-if="benchmark" :results="benchmark" />
-          </div>
-        </details>
+        <CipherDetails :file="file" />
 
         <section class="block delete">
           <template v-if="!confirmingDelete">
@@ -373,58 +216,6 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
   border-top: 1px solid var(--line);
 }
 
-.share-form {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 0.75rem;
-  align-items: end;
-}
-
-.key-card {
-  padding: 1rem 1.1rem;
-  margin-bottom: 1rem;
-  background: var(--accent-soft);
-  border-radius: var(--radius-sheet);
-}
-
-.share-key {
-  font-size: 1.35rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  margin: 0.25rem 0 0.75rem;
-  user-select: all;
-}
-
-.shares {
-  list-style: none;
-  padding: 0;
-  margin: 1rem 0 0;
-}
-
-.shares li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.shares li > span {
-  display: flex;
-  flex-direction: column;
-}
-
-.bench {
-  margin-top: 1rem;
-  display: grid;
-  gap: 1rem;
-}
-
-.bench > button {
-  justify-self: start;
-}
-
 .confirm p {
   margin-bottom: 0.75rem;
 }
@@ -432,20 +223,5 @@ const busy = computed(() => props.file !== null && store.busyFileId === props.fi
 .row {
   display: flex;
   gap: 0.6rem;
-}
-
-button.small {
-  min-height: 2.2rem;
-  font-size: 0.9rem;
-}
-
-@media (max-width: 560px) {
-  .share-form {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .share-form > :first-child {
-    grid-column: 1 / -1;
-  }
 }
 </style>
