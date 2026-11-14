@@ -37,3 +37,19 @@ export function requestCategoryLabel(category: RequestCategory | ''): string {
 
 /** Longest message the backend accepts. */
 export const REQUEST_MESSAGE_MAX = 500
+
+/** Prefix of every envelope: `CSK1.<request id>.<item id>.<key>`. */
+export const ENVELOPE_PREFIX = 'CSK1'
+
+/**
+ * Read the request and item ids from a pasted envelope, ignoring spaces and
+ * line breaks that chat apps add. `null` if it isn't an envelope. The key part
+ * is only checked for its characters; the server does the real check.
+ */
+export function parseEnvelope(text: string): { requestId: number; itemId: number } | null {
+  const parts = text.replace(/\s+/g, '').split('.')
+  if (parts.length !== 4 || parts[0] !== ENVELOPE_PREFIX) return null
+  const [, request, item, key] = parts as [string, string, string, string]
+  if (!/^\d+$/.test(request) || !/^\d+$/.test(item) || !/^[A-Za-z0-9_-]+$/.test(key)) return null
+  return { requestId: Number(request), itemId: Number(item) }
+}

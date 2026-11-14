@@ -1,5 +1,7 @@
 import type {
   AccessRequest,
+  ApproveRequestBody,
+  ApproveResult,
   Algorithm,
   AuthResponse,
   BenchmarkResult,
@@ -9,6 +11,7 @@ import type {
   RequestBox,
   Role,
   DownloadEvent,
+  EnvelopeAgain,
   FileCategory,
   KeyPair,
   KeyPurpose,
@@ -200,6 +203,42 @@ export const requestsApi = {
 
   /** As the requester: withdraw a pending request. */
   cancel(id: number): Promise<void> {
+    return requestJson<void>(`/api/access-requests/${id}/`, { method: 'DELETE' })
+  },
+
+  /** As the owner: grant records and/or the profile. Returns one envelope per item. */
+  approve(id: number, body: ApproveRequestBody): Promise<ApproveResult> {
+    return requestJson<ApproveResult>(`/api/access-requests/${id}/approve/`, {
+      method: 'POST',
+      json: body,
+    })
+  },
+
+  /** As the owner: the same envelope again, to resend it. */
+  envelope(id: number, itemId: number): Promise<EnvelopeAgain> {
+    return requestJson<EnvelopeAgain>(`/api/access-requests/${id}/items/${itemId}/envelope/`)
+  },
+
+  /** As the requester: enter the envelope the owner sent. */
+  redeem(id: number, itemId: number, envelope: string): Promise<void> {
+    return requestJson<void>(`/api/access-requests/${id}/items/${itemId}/redeem/`, {
+      method: 'POST',
+      json: { envelope },
+    })
+  },
+
+  /** As the requester: a redeemed record, for preview. */
+  openFile(id: number, itemId: number): Promise<{ blob: Blob; filename: string | null }> {
+    return requestBlob(withQuery(`/api/access-requests/${id}/items/${itemId}/`, { inline: 1 }))
+  },
+
+  /** As the requester: a redeemed profile snapshot. */
+  openProfile(id: number, itemId: number): Promise<Record<string, string>> {
+    return requestJson<Record<string, string>>(`/api/access-requests/${id}/items/${itemId}/`)
+  },
+
+  /** As the owner: end approved access; every shared copy and key is deleted. */
+  revoke(id: number): Promise<void> {
     return requestJson<void>(`/api/access-requests/${id}/`, { method: 'DELETE' })
   },
 }

@@ -51,7 +51,10 @@ export interface MockShare {
   last_accessed_at: string | null
 }
 
-export interface MockRequest extends Omit<AccessRequest, 'requester' | 'owner' | 'expired'> {
+export interface MockRequest extends Omit<
+  AccessRequest,
+  'requester' | 'owner' | 'expired' | 'items'
+> {
   requester: number
   owner: number
 }
@@ -263,6 +266,7 @@ export function serializeRequest(request: MockRequest): AccessRequest {
     requester: name(request.requester),
     owner: name(request.owner),
     expired: request.expires_at !== null && new Date(request.expires_at) <= new Date(),
+    items: [], // approving isn't in the mock yet
   }
 }
 

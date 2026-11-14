@@ -174,6 +174,47 @@ export interface AccessRequest {
   decided_at: string | null
   expires_at: string | null
   expired: boolean
+  /** What was granted; empty until approved and after revocation. Never names or content. */
+  items: GrantedItemSummary[]
+}
+
+export type GrantKind = 'FILE' | 'PROFILE'
+
+export interface GrantedItemSummary {
+  item_id: number
+  kind: GrantKind
+  /** Record category; `null` for a profile snapshot. */
+  category: FileCategory | null
+  redeemed: boolean
+  access_count: number
+}
+
+export interface ApproveRequestBody {
+  file_ids: number[]
+  include_profile: boolean
+  expires_hours: number
+}
+
+/** One granted item and its envelope: the item key, encrypted for the requester. */
+export interface GrantedEnvelope {
+  item_id: number
+  kind: GrantKind
+  category: FileCategory | null
+  envelope: string
+}
+
+export interface ApproveResult {
+  request: AccessRequest
+  /** The requester's encryption-key fingerprint, to compare with them. */
+  recipient_fingerprint: string
+  items: GrantedEnvelope[]
+}
+
+export interface EnvelopeAgain {
+  item_id: number
+  kind: GrantKind
+  envelope: string
+  recipient_fingerprint: string
 }
 
 export interface NewAccessRequest {

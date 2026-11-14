@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { requestsApi } from '@/api/cipherSafe'
-import { REQUEST_STATUSES, requestCategoryLabel, requestStatus } from '@/config/requests'
+import {
+  REQUEST_STATUSES,
+  parseEnvelope,
+  requestCategoryLabel,
+  requestStatus,
+} from '@/config/requests'
 import type { RequestStatus } from '@/types/api'
 import { jsonResponse } from './helpers'
 
@@ -66,5 +71,60 @@ describe('request status labels', () => {
     expect(requestCategoryLabel('PROFILE')).toBe('Profile')
     expect(requestCategoryLabel('DOCUMENT')).toBe('Medical document')
     expect(requestCategoryLabel('')).toBe('Anything')
+  })
+})
+
+describe('requestsApi: approving and opening', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('approves with the chosen items and duration', async () => {
+    const body = { file_ids: [3, 9], include_profile: true, expires_hours: 24 }
+    expect(await sent(() => requestsApi.approve(7, body))).toEqual({
+      url: '/api/access-requests/7/approve/',
+      method: 'POST',
+      json: body,
+    })
+  })
+
+  it('shows an envelope again and redeems one', async () => {
+    expect((await sent(() => requestsApi.envelope(7, 21))).url).toBe(
+      '/api/access-requests/7/items/21/envelope/',
+    )
+    expect(await sent(() => requestsApi.redeem(7, 21, 'CSK1.7.21.abc'))).toEqual({
+      url: '/api/access-requests/7/items/21/redeem/',
+      method: 'POST',
+      json: { envelope: 'CSK1.7.21.abc' },
+    })
+  })
+
+  it('opens a record inline and revokes', async () => {
+    const opened = await sent(() => requestsApi.openFile(7, 21), new Response('data'))
+    expect(opened.url).toBe('/api/access-requests/7/items/21/?inline=1')
+    const revoke = await sent(() => requestsApi.revoke(7), new Response(null, { status: 204 }))
+    expect(revoke).toMatchObject({ url: '/api/access-requests/7/', method: 'DELETE' })
+  })
+})
+
+describe('parseEnvelope', () => {
+  it('reads the request and item ids', () => {
+    expect(parseEnvelope('CSK1.7.21.Zm9v_bar-baz')).toEqual({ requestId: 7, itemId: 21 })
+  })
+
+  it('ignores spaces and line breaks from chat apps', () => {
+    expect(parseEnvelope('  CSK1.7.21.Zm9v\nYmFy \r\n')).toEqual({ requestId: 7, itemId: 21 })
+  })
+
+  it('rejects anything else', () => {
+    for (const text of [
+      '',
+      'hello',
+      'CSK2.7.21.abc',
+      'CSK1.x.21.abc',
+      'CSK1.7.21.',
+      'CSK1.7.21.a.b',
+      'CSK1.7.21.a+b',
+    ]) {
+      expect(parseEnvelope(text)).toBeNull()
+    }
   })
 })
