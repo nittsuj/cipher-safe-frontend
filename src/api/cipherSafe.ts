@@ -1,15 +1,18 @@
 import type {
+  AccessRequest,
   Algorithm,
   AuthResponse,
   BenchmarkResult,
   CreatedShare,
   FileShare,
   ReceivedShare,
+  RequestBox,
   Role,
   DownloadEvent,
   FileCategory,
   KeyPair,
   KeyPurpose,
+  NewAccessRequest,
   PersonalData,
   PublicKey,
   StoredFile,
@@ -176,5 +179,27 @@ export const keysApi = {
     return requestJson<PublicKey>(
       withQuery(`/api/users/${encodeURIComponent(username)}/public-key/`, { purpose }),
     )
+  },
+}
+
+export const requestsApi = {
+  /** Ask a user for their data. No password needed: nothing is decrypted. */
+  create(request: NewAccessRequest): Promise<AccessRequest> {
+    return requestJson<AccessRequest>('/api/access-requests/', { method: 'POST', json: request })
+  },
+
+  /** Requests to me (`incoming`) or from me (`outgoing`), newest first. */
+  list(box: RequestBox): Promise<AccessRequest[]> {
+    return requestJson<AccessRequest[]>(withQuery('/api/access-requests/', { box }))
+  },
+
+  /** As the owner: refuse a pending request. */
+  deny(id: number): Promise<AccessRequest> {
+    return requestJson<AccessRequest>(`/api/access-requests/${id}/deny/`, { method: 'POST' })
+  },
+
+  /** As the requester: withdraw a pending request. */
+  cancel(id: number): Promise<void> {
+    return requestJson<void>(`/api/access-requests/${id}/`, { method: 'DELETE' })
   },
 }

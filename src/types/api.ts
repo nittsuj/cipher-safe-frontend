@@ -5,6 +5,12 @@ export type Role = 'PATIENT' | 'DOCTOR'
 export type Algorithm = (typeof ALGORITHMS)[number]
 export type FileCategory = 'ID_CARD' | 'DOCUMENT' | 'VIDEO'
 
+/** Where an access request is in its life. Expiry is the separate `expired` flag. */
+export type RequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED' | 'REVOKED'
+
+/** What a requester may hint at: a record category, or the profile. */
+export type RequestCategory = FileCategory | 'PROFILE'
+
 /** What a key pair is for: receiving shared-record keys, or signing PDFs. */
 export type KeyPurpose = 'ENCRYPTION' | 'SIGNING'
 
@@ -154,3 +160,26 @@ export interface PublicKey {
   fingerprint: string
   public_key_pem: string
 }
+
+/** One user asking for another user's data. Says nothing about the owner's records. */
+export interface AccessRequest {
+  id: number
+  requester: string
+  owner: string
+  message: string
+  /** Empty string when no hint was given. */
+  category: RequestCategory | ''
+  status: RequestStatus
+  created_at: string
+  decided_at: string | null
+  expires_at: string | null
+  expired: boolean
+}
+
+export interface NewAccessRequest {
+  owner: string
+  message?: string
+  category?: RequestCategory | ''
+}
+
+export type RequestBox = 'incoming' | 'outgoing'
