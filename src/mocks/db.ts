@@ -5,6 +5,7 @@
  * timings are synthetic. State lives in memory and resets on page reload.
  */
 import type {
+  AccessRequest,
   Algorithm,
   DownloadEvent,
   FileCategory,
@@ -50,6 +51,11 @@ export interface MockShare {
   last_accessed_at: string | null
 }
 
+export interface MockRequest extends Omit<AccessRequest, 'requester' | 'owner' | 'expired'> {
+  requester: number
+  owner: number
+}
+
 export interface MockProfile {
   fields: Record<string, string>
   updated_at: string
@@ -66,6 +72,8 @@ export const db = {
   downloads: [] as (DownloadEvent & { owner: number })[],
   /** Active key pair per user and purpose; rotated pairs are dropped (no data uses them here). */
   keyPairs: new Map<string, KeyPair>(),
+  /** Access requests, newest first. `requester` / `owner` are user ids. */
+  requests: [] as MockRequest[],
   profiles: new Map<number, MockProfile>(),
   /** access/refresh token -> user id */
   tokens: new Map<string, number>(),
@@ -227,6 +235,37 @@ export function createKeyPair(userId: number, purpose: KeyPurpose): KeyPair {
   return pair
 }
 
+export function addRequest(
+  requester: MockUser,
+  owner: MockUser,
+  message: string,
+  category: MockRequest['category'],
+): MockRequest {
+  const request: MockRequest = {
+    id: id(),
+    requester: requester.id,
+    owner: owner.id,
+    message,
+    category,
+    status: 'PENDING',
+    created_at: now(),
+    decided_at: null,
+    expires_at: null,
+  }
+  db.requests.unshift(request)
+  return request
+}
+
+export function serializeRequest(request: MockRequest): AccessRequest {
+  const name = (userId: number) => db.users.find((u) => u.id === userId)?.username ?? '?'
+  return {
+    ...request,
+    requester: name(request.requester),
+    owner: name(request.owner),
+    expired: request.expires_at !== null && new Date(request.expires_at) <= new Date(),
+  }
+}
+
 // ------------------------------------------------------------------- seed
 
 export const DEMO_PATIENT = { username: 'patient', password: 'patient-password' }
@@ -237,6 +276,8 @@ function seed() {
   const doctor = createUser(DEMO_DOCTOR.username, DEMO_DOCTOR.password, 'DOCTOR')
   // The demo doctor already has an encryption key, like after a first sign-in.
   createKeyPair(doctor.id, 'ENCRYPTION')
+  // An incoming request waiting for the demo patient, so the Requests page isn't empty.
+  addRequest(doctor, patient, 'Your latest lab results, for the check-up on Monday.', 'DOCUMENT')
 
   db.profiles.set(patient.id, {
     updated_at: now(),

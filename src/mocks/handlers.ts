@@ -21,9 +21,11 @@ import type {
   Role,
 } from '@/types/api'
 import { FILE_CATEGORIES, PREVIEWABLE_TYPES } from '@/config/records'
+import { REQUEST_CATEGORIES } from '@/config/requests'
 import { ALGORITHMS } from '@/types/api'
 import {
   activeKeyPair,
+  addRequest,
   addFile,
   addShare,
   createKeyPair,
@@ -35,7 +37,9 @@ import {
   MODE_FOR,
   scramble,
   serializeFile,
+  serializeRequest,
   shareIsActive,
+  type MockRequest,
   type MockShare,
   type MockUser,
 } from './db'
@@ -161,6 +165,23 @@ function stats(values: number[]) {
   }
 }
 
+/** A request the user takes part in; anyone else gets 404, like the backend. */
+function requestFor(user: MockUser, id: string | readonly string[] | undefined): MockRequest {
+  const request = db.requests.find(
+    (r) => r.id === Number(id) && (r.requester === user.id || r.owner === user.id),
+  )
+  if (!request) throw detail(404, 'No AccessRequest matches the given query.')
+  return request
+}
+
+/** Same rule as the backend: only a pending request can be decided. */
+function decide(request: MockRequest, status: MockRequest['status']) {
+  if (request.status !== 'PENDING')
+    throw detail(409, `This request is already ${request.status.toLowerCase()}.`)
+  request.status = status
+  request.decided_at = new Date().toISOString()
+}
+
 // ---------------------------------------------------------------- handlers
 
 export const handlers = [
@@ -273,6 +294,75 @@ export const handlers = [
         fingerprint,
         public_key_pem,
       })
+    }),
+  ),
+
+  // ----- access requests (any role)
+  http.get(
+    api('/access-requests/'),
+    guard(({ request }) => {
+      const user = currentUser(request)
+      const box = (new URL(request.url).searchParams.get('box') ?? 'incoming').toLowerCase()
+      if (box !== 'incoming' && box !== 'outgoing')
+        throw new HttpError(400, { box: 'Must be incoming or outgoing.' })
+      const mine = db.requests.filter((r) =>
+        box === 'incoming' ? r.owner === user.id : r.requester === user.id,
+      )
+      return HttpResponse.json(mine.map(serializeRequest))
+    }),
+  ),
+
+  http.post(
+    api('/access-requests/'),
+    guard(async ({ request }) => {
+      const user = currentUser(request)
+      const body = (await request.json()) as { owner?: string; message?: string; category?: string }
+      const owner = db.users.find((u) => u.username === body.owner?.trim())
+      if (!owner) throw new HttpError(400, { owner: ['No user with that username.'] })
+      if (owner.id === user.id)
+        throw new HttpError(400, { owner: ["You can't request your own data."] })
+      const category = body.category ?? ''
+      if (category && !REQUEST_CATEGORIES.some((c) => c.value === category))
+        throw new HttpError(400, { category: [`"${category}" is not a valid choice.`] })
+      if ((body.message ?? '').length > 500)
+        throw new HttpError(400, {
+          message: ['Ensure this field has no more than 500 characters.'],
+        })
+      const pending = db.requests.some(
+        (r) => r.requester === user.id && r.owner === owner.id && r.status === 'PENDING',
+      )
+      if (pending)
+        throw new HttpError(400, { owner: ['You already have a pending request to this user.'] })
+      const created = addRequest(
+        user,
+        owner,
+        body.message ?? '',
+        category as MockRequest['category'],
+      )
+      return HttpResponse.json(serializeRequest(created), { status: 201 })
+    }),
+  ),
+
+  http.post(
+    api('/access-requests/:id/deny/'),
+    guard(({ request, params }) => {
+      const user = currentUser(request)
+      const accessRequest = requestFor(user, params.id)
+      if (accessRequest.owner !== user.id) throw detail(403, 'Only the owner can deny a request.')
+      decide(accessRequest, 'DENIED')
+      return HttpResponse.json(serializeRequest(accessRequest))
+    }),
+  ),
+
+  http.delete(
+    api('/access-requests/:id/'),
+    guard(({ request, params }) => {
+      const user = currentUser(request)
+      const accessRequest = requestFor(user, params.id)
+      if (accessRequest.requester !== user.id)
+        throw detail(403, 'Only the requester can cancel a request; deny it instead.')
+      decide(accessRequest, 'CANCELLED')
+      return new HttpResponse(null, { status: 204 })
     }),
   ),
 
