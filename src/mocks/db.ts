@@ -9,6 +9,8 @@ import type {
   DownloadEvent,
   FileCategory,
   FileCiphertext,
+  KeyPair,
+  KeyPurpose,
   Role,
   StoredFile,
 } from '@/types/api'
@@ -62,6 +64,8 @@ export const db = {
   files: [] as MockFile[],
   shares: [] as MockShare[],
   downloads: [] as (DownloadEvent & { owner: number })[],
+  /** Active key pair per user and purpose; rotated pairs are dropped (no data uses them here). */
+  keyPairs: new Map<string, KeyPair>(),
   profiles: new Map<number, MockProfile>(),
   /** access/refresh token -> user id */
   tokens: new Map<string, number>(),
@@ -202,6 +206,27 @@ export function shareIsActive(share: MockShare): boolean {
   return !share.revoked && new Date(share.expires_at) > new Date()
 }
 
+const keyPairId = (userId: number, purpose: KeyPurpose) => `${userId}:${purpose}`
+
+export function activeKeyPair(userId: number, purpose: KeyPurpose): KeyPair | undefined {
+  return db.keyPairs.get(keyPairId(userId, purpose))
+}
+
+/** A fake RSA-3072 pair: random fingerprint and a placeholder PEM. No real keys. */
+export function createKeyPair(userId: number, purpose: KeyPurpose): KeyPair {
+  const digest = crypto.getRandomValues(new Uint8Array(32))
+  const pair: KeyPair = {
+    purpose,
+    algorithm: 'RSA-3072',
+    fingerprint: Array.from(digest, (b) => b.toString(16).padStart(2, '0').toUpperCase()).join(':'),
+    public_key_pem: `-----BEGIN PUBLIC KEY-----\n${randomKey()}${randomKey()}\n-----END PUBLIC KEY-----\n`,
+    has_certificate: false,
+    created_at: now(),
+  }
+  db.keyPairs.set(keyPairId(userId, purpose), pair)
+  return pair
+}
+
 // ------------------------------------------------------------------- seed
 
 export const DEMO_PATIENT = { username: 'patient', password: 'patient-password' }
@@ -209,7 +234,9 @@ export const DEMO_DOCTOR = { username: 'doctor', password: 'doctor-password' }
 
 function seed() {
   const patient = createUser(DEMO_PATIENT.username, DEMO_PATIENT.password, 'PATIENT')
-  createUser(DEMO_DOCTOR.username, DEMO_DOCTOR.password, 'DOCTOR')
+  const doctor = createUser(DEMO_DOCTOR.username, DEMO_DOCTOR.password, 'DOCTOR')
+  // The demo doctor already has an encryption key, like after a first sign-in.
+  createKeyPair(doctor.id, 'ENCRYPTION')
 
   db.profiles.set(patient.id, {
     updated_at: now(),

@@ -12,12 +12,21 @@ import {
   type StrictRequest,
 } from 'msw'
 
-import type { Algorithm, FileCategory, FileShare, ReceivedShare, Role } from '@/types/api'
+import type {
+  Algorithm,
+  FileCategory,
+  FileShare,
+  KeyPurpose,
+  ReceivedShare,
+  Role,
+} from '@/types/api'
 import { FILE_CATEGORIES, PREVIEWABLE_TYPES } from '@/config/records'
 import { ALGORITHMS } from '@/types/api'
 import {
+  activeKeyPair,
   addFile,
   addShare,
+  createKeyPair,
   createUser,
   db,
   fakeTimings,
@@ -216,6 +225,54 @@ export const handlers = [
     api('/me/'),
     guard(({ request }) => {
       return HttpResponse.json(publicUser(currentUser(request)))
+    }),
+  ),
+
+  // ----- key pairs (any role)
+  http.get(
+    api('/me/keys/'),
+    guard(({ request }) => {
+      const user = currentUser(request)
+      const purposes: KeyPurpose[] = ['ENCRYPTION', 'SIGNING']
+      return HttpResponse.json(purposes.flatMap((p) => activeKeyPair(user.id, p) ?? []))
+    }),
+  ),
+
+  http.post(
+    api('/me/keys/'),
+    guard(async ({ request }) => {
+      const user = currentUser(request)
+      requirePassword(request, user)
+      const body = (await request.json()) as { purpose?: string; rotate?: boolean }
+      if (body.purpose !== 'ENCRYPTION' && body.purpose !== 'SIGNING')
+        throw new HttpError(400, { purpose: [`"${body.purpose}" is not a valid choice.`] })
+      const existing = activeKeyPair(user.id, body.purpose)
+      if (existing && !body.rotate) return HttpResponse.json(existing)
+      await delay(400) // RSA-3072 generation takes a moment
+      return HttpResponse.json(createKeyPair(user.id, body.purpose), { status: 201 })
+    }),
+  ),
+
+  http.get(
+    api('/users/:username/public-key/'),
+    guard(({ request, params }) => {
+      currentUser(request)
+      const purpose = (
+        new URL(request.url).searchParams.get('purpose') ?? 'ENCRYPTION'
+      ).toUpperCase()
+      if (purpose !== 'ENCRYPTION' && purpose !== 'SIGNING')
+        throw new HttpError(400, { purpose: 'Must be one of ENCRYPTION, SIGNING.' })
+      const owner = db.users.find((u) => u.username === params.username)
+      const pair = owner && activeKeyPair(owner.id, purpose)
+      if (!owner || !pair) throw detail(404, 'Not found.')
+      const { algorithm, fingerprint, public_key_pem } = pair
+      return HttpResponse.json({
+        username: owner.username,
+        purpose,
+        algorithm,
+        fingerprint,
+        public_key_pem,
+      })
     }),
   ),
 
