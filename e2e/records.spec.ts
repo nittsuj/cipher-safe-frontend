@@ -60,3 +60,10 @@ test('deletes a record', async ({ page }) => {
 
   await expect(page.getByRole('button', { name: new RegExp(NAME) })).toHaveCount(0)
 })
+
+test('the record drawer points to the Requests page for sharing', async ({ page }) => {
+  await uploadText(page, NAME, CONTENT)
+  const drawer = await openRecord(page, NAME)
+  await drawer.getByRole('link', { name: 'Requests page' }).click()
+  await expect(page).toHaveURL(/\/requests$/)
+})

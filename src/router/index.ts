@@ -51,10 +51,9 @@ export const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    // The old doctor share page; sharing now goes through requests.
     path: '/shared',
-    name: 'shared',
-    component: () => import('@/views/SharedView.vue'),
-    meta: { requiresAuth: true, role: 'DOCTOR' },
+    redirect: '/requests',
   },
   { path: '/:pathMatch(.*)*', redirect: '/files' },
 ]
@@ -70,7 +69,7 @@ export function installGuards(target: Router): void {
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
       return { name: 'login', query: { redirect: to.fullPath } }
     }
-    const home = auth.isDoctor ? 'shared' : 'files'
+    const home = auth.isDoctor ? 'requests' : 'files'
     if (to.meta.guestOnly && auth.isAuthenticated) {
       return { name: home }
     }

@@ -12,14 +12,7 @@ import {
   type StrictRequest,
 } from 'msw'
 
-import type {
-  Algorithm,
-  FileCategory,
-  FileShare,
-  KeyPurpose,
-  ReceivedShare,
-  Role,
-} from '@/types/api'
+import type { Algorithm, FileCategory, KeyPurpose, Role } from '@/types/api'
 import { FILE_CATEGORIES, PREVIEWABLE_TYPES } from '@/config/records'
 import { REQUEST_CATEGORIES } from '@/config/requests'
 import { ALGORITHMS } from '@/types/api'
@@ -28,7 +21,6 @@ import {
   addRequest,
   addFile,
   addGrant,
-  addShare,
   createKeyPair,
   createUser,
   db,
@@ -39,10 +31,8 @@ import {
   scramble,
   serializeFile,
   serializeRequest,
-  shareIsActive,
   type MockGrant,
   type MockRequest,
-  type MockShare,
   type MockUser,
 } from './db'
 
@@ -144,19 +134,6 @@ function fileResponse(data: Uint8Array, contentType: string, filename: string, i
       'Cache-Control': 'no-store',
     },
   })
-}
-
-function serializeShare(share: MockShare): FileShare {
-  return {
-    id: share.id,
-    file: share.file,
-    doctor: db.users.find((u) => u.id === share.doctor)?.username ?? '?',
-    created_at: share.created_at,
-    expires_at: share.expires_at,
-    active: shareIsActive(share),
-    access_count: share.access_count,
-    last_accessed_at: share.last_accessed_at,
-  }
 }
 
 function stats(values: number[]) {
@@ -586,7 +563,7 @@ export const handlers = [
       const user = requireRole(request, 'PATIENT')
       const file = ownFile(user, params.id)
       db.files = db.files.filter((f) => f !== file)
-      db.shares = db.shares.filter((s) => s.file !== file.id)
+      db.grants = db.grants.filter((g) => g.file !== file.id)
       db.downloads = db.downloads.filter((d) => d.file !== file.id)
       return new HttpResponse(null, { status: 204 })
     }),
@@ -696,90 +673,6 @@ export const handlers = [
           .filter((d) => d.owner === user.id)
           .map((event) => ({ ...event, owner: undefined })),
       )
-    }),
-  ),
-
-  // ----- sharing (patient side)
-  http.get(
-    api('/files/:id/shares/'),
-    guard(({ request, params }) => {
-      const user = requireRole(request, 'PATIENT')
-      const file = ownFile(user, params.id)
-      return HttpResponse.json(db.shares.filter((s) => s.file === file.id).map(serializeShare))
-    }),
-  ),
-
-  http.post(
-    api('/files/:id/shares/'),
-    guard(async ({ request, params }) => {
-      const user = patientWithPassword(request)
-      const file = ownFile(user, params.id)
-      const body = (await request.json()) as { doctor?: string; expires_hours?: number }
-      const doctor = db.users.find((u) => u.username === body.doctor && u.role === 'DOCTOR')
-      if (!doctor) throw new HttpError(400, { doctor: ['No doctor with that username.'] })
-      const hours = body.expires_hours ?? 24
-      if (!Number.isInteger(hours) || hours < 1 || hours > 168)
-        throw new HttpError(400, { expires_hours: ['Ensure this value is between 1 and 168.'] })
-      const share = addShare(file, doctor, hours)
-      return HttpResponse.json({ ...serializeShare(share), share_key: share.key }, { status: 201 })
-    }),
-  ),
-
-  http.delete(
-    api('/shares/:id/'),
-    guard(({ request, params }) => {
-      const user = requireRole(request, 'PATIENT')
-      const share = db.shares.find(
-        (s) =>
-          s.id === Number(params.id) &&
-          db.files.some((f) => f.id === s.file && f.owner === user.id),
-      )
-      if (!share) throw detail(404, 'No FileShare matches the given query.')
-      share.revoked = true
-      return new HttpResponse(null, { status: 204 })
-    }),
-  ),
-
-  // ----- sharing (doctor side)
-  http.get(
-    api('/shares/received/'),
-    guard(({ request }) => {
-      const doctor = requireRole(request, 'DOCTOR')
-      const received: ReceivedShare[] = db.shares
-        .filter((s) => s.doctor === doctor.id && shareIsActive(s))
-        .flatMap((s) => {
-          const file = db.files.find((f) => f.id === s.file)
-          if (!file) return []
-          return [
-            {
-              id: s.id,
-              patient: db.users.find((u) => u.id === file.owner)?.username ?? '?',
-              category: file.category,
-              plaintext_size: file.data.length,
-              created_at: s.created_at,
-              expires_at: s.expires_at,
-              access_count: s.access_count,
-            },
-          ]
-        })
-      return HttpResponse.json(received)
-    }),
-  ),
-
-  http.get(
-    api('/shares/received/:id/open/'),
-    guard(({ request, params }) => {
-      const doctor = requireRole(request, 'DOCTOR')
-      const share = db.shares.find((s) => s.id === Number(params.id) && s.doctor === doctor.id)
-      if (!share || !shareIsActive(share)) throw detail(404, 'Not found.')
-      const key = request.headers.get('X-Share-Key')?.trim()
-      if (!key) throw new HttpError(400, { share_key: 'Enter the share key the patient sent you.' })
-      if (key !== share.key) throw detail(403, 'Wrong share key.')
-      const file = db.files.find((f) => f.id === share.file)
-      if (!file) throw detail(404, 'Not found.')
-      share.access_count += 1
-      share.last_accessed_at = new Date().toISOString()
-      return fileResponse(file.data, file.contentType, file.name, wantsInline(request))
     }),
   ),
 ]

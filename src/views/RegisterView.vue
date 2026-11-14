@@ -20,7 +20,7 @@ const role = ref<Role>('PATIENT')
 const register = useAsyncAction(async () => {
   if (password.value !== confirm.value) throw new FormError('The two passwords are different.')
   await auth.register(username.value, password.value, role.value)
-  router.push(role.value === 'DOCTOR' ? '/shared' : '/files')
+  router.push(role.value === 'DOCTOR' ? '/requests' : '/files')
 }, 'Could not create the account. Check your connection and try again.')
 </script>
 
@@ -40,7 +40,7 @@ const register = useAsyncAction(async () => {
           <input v-model="role" type="radio" name="role" value="DOCTOR" />
           <span>
             Doctor
-            <span class="hint">Open records patients share with me</span>
+            <span class="hint">Ask patients for their records</span>
           </span>
         </label>
       </fieldset>
@@ -48,7 +48,6 @@ const register = useAsyncAction(async () => {
       <div class="field">
         <label for="username">Username</label>
         <input id="username" v-model="username" autocomplete="username" required />
-        <span v-if="role === 'DOCTOR'" class="hint">Patients type this name to share with you.</span>
       </div>
       <div class="field">
         <label for="password">

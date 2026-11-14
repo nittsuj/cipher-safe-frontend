@@ -18,10 +18,7 @@ watch(
 
 const links = computed(() =>
   auth.isDoctor
-    ? [
-        { to: '/shared', label: 'Shared with me' },
-        { to: '/requests', label: 'Requests' },
-      ]
+    ? [{ to: '/requests', label: 'Requests' }]
     : [
         { to: '/files', label: 'Records' },
         { to: '/requests', label: 'Requests' },
@@ -40,7 +37,7 @@ async function handleLogout() {
   <a class="skip" href="#main">Skip to content</a>
   <header class="topbar">
     <div class="topbar-inner">
-      <RouterLink :to="auth.isDoctor ? '/shared' : '/files'" class="brand">
+      <RouterLink :to="auth.isDoctor ? '/requests' : '/files'" class="brand">
         <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
           <path d="M4 9a3 3 0 0 1 3-3h6l3 3h9a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z" />
           <rect x="13" y="15" width="6" height="6" rx="1.2" class="lock" />

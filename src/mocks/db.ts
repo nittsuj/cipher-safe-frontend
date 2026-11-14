@@ -39,18 +39,6 @@ export interface MockFile {
   ciphertexts: FileCiphertext[]
 }
 
-export interface MockShare {
-  id: number
-  file: number
-  doctor: number
-  key: string
-  created_at: string
-  expires_at: string
-  revoked: boolean
-  access_count: number
-  last_accessed_at: string | null
-}
-
 export interface MockRequest extends Omit<
   AccessRequest,
   'requester' | 'owner' | 'expired' | 'items'
@@ -85,7 +73,6 @@ const now = () => new Date().toISOString()
 export const db = {
   users: [] as MockUser[],
   files: [] as MockFile[],
-  shares: [] as MockShare[],
   downloads: [] as (DownloadEvent & { owner: number })[],
   /** Active key pair per user and purpose; rotated pairs are dropped (no data uses them here). */
   keyPairs: new Map<string, KeyPair>(),
@@ -211,26 +198,6 @@ export function logDownload(file: MockFile, algorithm: Algorithm) {
     created_at: now(),
   })
   return timings
-}
-
-export function addShare(file: MockFile, doctor: MockUser, hours: number): MockShare {
-  const share: MockShare = {
-    id: id(),
-    file: file.id,
-    doctor: doctor.id,
-    key: randomKey(),
-    created_at: now(),
-    expires_at: new Date(Date.now() + hours * 3_600_000).toISOString(),
-    revoked: false,
-    access_count: 0,
-    last_accessed_at: null,
-  }
-  db.shares.unshift(share)
-  return share
-}
-
-export function shareIsActive(share: MockShare): boolean {
-  return !share.revoked && new Date(share.expires_at) > new Date()
 }
 
 const keyPairId = (userId: number, purpose: KeyPurpose) => `${userId}:${purpose}`

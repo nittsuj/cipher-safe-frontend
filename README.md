@@ -20,6 +20,12 @@ integrity-checked with HMAC-SHA256.
   uses CTR for AES and DES; a tampered file is refused rather than returned.
 - **Analysis**: per-algorithm timing tables (encryption + downloads), a
   per-file benchmark, and download history.
+- **My keys**: every user gets an RSA encryption key on sign-in; the profile
+  page shows its fingerprint and can make a new one.
+- **Requests**: ask another user for their data; the owner approves and gets
+  one key per shared item (encrypted with the requester's public key) to send
+  by WhatsApp or email; the requester pastes it to open the item. The owner can
+  show a key again or stop access.
 
 ## Architecture
 
@@ -129,15 +135,15 @@ VITE_API_BASE=            # empty = use the dev proxy / same-origin /api
 src/
   api/          fetch client + typed endpoint wrappers
   assets/       global styles
-  components/   drawer, preview, share section, charts
+  components/   drawer, preview, keys, requests, approve and redeem, charts
   composables/  useAsyncAction (loading/error wrapper)
   mocks/        in-browser mock API for `pnpm dev:mock` (MSW)
-  config/       UI settings: record categories, profile form layout
+  config/       UI settings: record categories, profile form, request statuses
   router/       routes + auth guards
-  stores/       Pinia stores (auth, files)
+  stores/       Pinia stores (auth, files, requests)
   types/        API types mirroring the DRF serializers
   utils/        formatting + download helpers
-  views/        Login, Register, PersonalData, Files, Analysis, Shared
+  views/        Login, Register, PersonalData, Files, Analysis, Requests
   __tests__/    unit tests
 e2e/            Playwright tests
 ```
