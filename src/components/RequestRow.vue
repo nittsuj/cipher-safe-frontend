@@ -5,7 +5,7 @@ import { requestCategoryLabel, requestStatus } from '@/config/requests'
 import type { AccessRequest, RequestBox } from '@/types/api'
 import { formatDate, formatUntil } from '@/utils/format'
 
-/** One access request in a list. Actions come in through the `actions` slot. */
+/** One access request in a list. Buttons go in the `actions` slot; messages in the default slot. */
 const props = defineProps<{ request: AccessRequest; box: RequestBox }>()
 
 const status = computed(() => requestStatus(props.request))
@@ -33,6 +33,7 @@ const otherUser = computed(() =>
     <div class="actions">
       <slot name="actions" />
     </div>
+    <slot />
   </li>
 </template>
 

@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+import { requestsApi } from '@/api/cipherSafe'
+import { getErrorMessage } from '@/api/client'
+
 import AskAccessForm from '@/components/AskAccessForm.vue'
 import RequestRow from '@/components/RequestRow.vue'
 import { useRequestsStore } from '@/stores/requests'
-import type { RequestBox } from '@/types/api'
+import type { AccessRequest, RequestBox } from '@/types/api'
 
 const store = useRequestsStore()
 const box = ref<RequestBox>('incoming')
@@ -17,6 +20,30 @@ const TABS: { box: RequestBox; label: string }[] = [
 const visible = computed(() => (box.value === 'incoming' ? store.incoming : store.outgoing))
 const count = (tab: RequestBox) =>
   tab === 'incoming' ? store.incoming.length : store.outgoing.length
+
+/** The request whose deny/cancel is waiting for confirmation, and errors per row. */
+const confirmingId = ref<number | null>(null)
+const busyId = ref<number | null>(null)
+const rowErrors = ref<Record<number, string>>({})
+
+async function act(request: AccessRequest, action: 'deny' | 'cancel') {
+  busyId.value = request.id
+  rowErrors.value = { ...rowErrors.value, [request.id]: '' }
+  try {
+    if (action === 'deny') store.replace(await requestsApi.deny(request.id))
+    else {
+      await requestsApi.cancel(request.id)
+      store.replace({ ...request, status: 'CANCELLED', decided_at: new Date().toISOString() })
+    }
+    confirmingId.value = null
+  } catch (err) {
+    const fallback = action === 'deny' ? 'Could not deny the request.' : 'Could not cancel it.'
+    rowErrors.value = { ...rowErrors.value, [request.id]: getErrorMessage(err, fallback) }
+    await store.load() // it may have changed meanwhile, e.g. cancelled by the other person
+  } finally {
+    busyId.value = null
+  }
+}
 
 onMounted(() => store.load())
 </script>
@@ -63,7 +90,39 @@ onMounted(() => store.load())
         </p>
       </div>
       <ul v-else class="list">
-        <RequestRow v-for="request in visible" :key="request.id" :request="request" :box="box" />
+        <RequestRow v-for="request in visible" :key="request.id" :request="request" :box="box">
+          <template v-if="request.status === 'PENDING'" #actions>
+            <div v-if="confirmingId === request.id" class="confirm" role="alert">
+              <p class="small">
+                {{
+                  box === 'incoming'
+                    ? `Deny ${request.requester}'s request? They can ask again later.`
+                    : `Cancel your request to ${request.owner}?`
+                }}
+              </p>
+              <div class="row">
+                <button
+                  class="danger"
+                  :disabled="busyId === request.id"
+                  @click="act(request, box === 'incoming' ? 'deny' : 'cancel')"
+                >
+                  {{ box === 'incoming' ? 'Deny' : 'Cancel request' }}
+                </button>
+                <button class="secondary" @click="confirmingId = null">Keep it</button>
+              </div>
+            </div>
+            <template v-else-if="box === 'incoming'">
+              <button disabled title="Coming soon">Approve</button>
+              <button class="secondary" @click="confirmingId = request.id">Deny</button>
+            </template>
+            <button v-else class="secondary" @click="confirmingId = request.id">
+              Cancel request
+            </button>
+          </template>
+          <p v-if="rowErrors[request.id]" class="notice error small" role="alert">
+            {{ rowErrors[request.id] }}
+          </p>
+        </RequestRow>
       </ul>
     </section>
   </div>
@@ -79,6 +138,15 @@ onMounted(() => store.load())
 .count {
   font-weight: 400;
   opacity: 0.75;
+}
+
+.confirm p {
+  margin: 0 0 0.5rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .list {

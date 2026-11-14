@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { DOCTOR, PATIENT, signIn } from './helpers.js'
+import { DOCTOR, PATIENT, signIn, signOut } from './helpers.js'
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
@@ -73,4 +73,63 @@ test('asking an unknown user shows the server error', async ({ page }) => {
   await page.getByLabel('Their username').fill('nobody')
   await page.getByRole('button', { name: 'Send request' }).click()
   await expect(page.getByRole('alert')).toContainText('No user with that username')
+})
+
+test('the patient denies the request and the doctor sees it was denied', async ({ page }) => {
+  await signIn(page, PATIENT)
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: /Requests/ })
+    .click()
+  const row = page.getByRole('listitem').filter({ hasText: `From ${DOCTOR.username}` })
+  await expect(row.getByRole('button', { name: 'Approve' })).toBeDisabled()
+
+  await row.getByRole('button', { name: 'Deny' }).click()
+  await expect(row.getByRole('alert')).toContainText('They can ask again later')
+  await row.getByRole('alert').getByRole('button', { name: 'Deny' }).click()
+  await expect(row).toContainText('Denied')
+  await expect(row.getByRole('button')).toHaveCount(0)
+  await expect(
+    page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Requests' }),
+  ).toHaveText('Requests')
+
+  await signOut(page)
+  await signIn(page, DOCTOR)
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Requests' })
+    .click()
+  await page.getByRole('tab', { name: /Outgoing/ }).click()
+  await expect(
+    page.getByRole('listitem').filter({ hasText: `To ${PATIENT.username}` }),
+  ).toContainText('Denied')
+})
+
+test('keeping a request leaves it waiting', async ({ page }) => {
+  await signIn(page, PATIENT)
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: /Requests/ })
+    .click()
+  const row = page.getByRole('listitem').filter({ hasText: `From ${DOCTOR.username}` })
+  await row.getByRole('button', { name: 'Deny' }).click()
+  await row.getByRole('button', { name: 'Keep it' }).click()
+  await expect(row).toContainText('Waiting')
+})
+
+test('the doctor cancels the request and can ask again', async ({ page }) => {
+  await signIn(page, DOCTOR)
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Requests' })
+    .click()
+  await page.getByRole('tab', { name: /Outgoing/ }).click()
+  const row = page.getByRole('listitem').filter({ hasText: `To ${PATIENT.username}` })
+  await row.getByRole('button', { name: 'Cancel request' }).click()
+  await row.getByRole('alert').getByRole('button', { name: 'Cancel request' }).click()
+  await expect(row).toContainText('Cancelled')
+
+  await page.getByLabel('Their username').fill(PATIENT.username)
+  await page.getByRole('button', { name: 'Send request' }).click()
+  await expect(page.getByRole('status')).toContainText(`Request sent to ${PATIENT.username}`)
 })
