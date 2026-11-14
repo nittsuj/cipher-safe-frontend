@@ -16,7 +16,11 @@ const store = useFilesStore()
 
 const downloadEncrypted = useAsyncAction(async (algorithm: Algorithm) => {
   const result = await filesApi.downloadCiphertext(props.file.id, algorithm)
-  downloadBlob(result.blob, result.filename ?? `${props.file.original_name}.${algorithm}-encrypted`)
+  // Same shape as the server's name: keep the extension (notes.AES-encrypted.txt).
+  const name = props.file.original_name
+  const dot = name.lastIndexOf('.')
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, '']
+  downloadBlob(result.blob, result.filename ?? `${stem}.${algorithm}-encrypted${ext}`)
 }, 'Download failed.')
 
 const benchmark = computed(() => store.benchmarks[props.file.id])
