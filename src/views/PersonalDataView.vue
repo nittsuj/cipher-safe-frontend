@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import AsyncButton from '@/components/AsyncButton.vue'
+import MyKeys from '@/components/MyKeys.vue'
 import { personalDataApi } from '@/api/cipherSafe'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { BLOOD_TYPES, PII_FIELDS, PROFILE_GROUPS, type ProfileField } from '@/config/profile'
@@ -139,6 +140,8 @@ onMounted(() => load.run())
         />
       </div>
     </form>
+
+    <MyKeys />
   </div>
 </template>
 
