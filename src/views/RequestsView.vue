@@ -7,6 +7,7 @@ import { getErrorMessage } from '@/api/client'
 import ApproveDialog from '@/components/ApproveDialog.vue'
 import AskAccessForm from '@/components/AskAccessForm.vue'
 import GrantedItems from '@/components/GrantedItems.vue'
+import OwnerGrants from '@/components/OwnerGrants.vue'
 import RequestRow from '@/components/RequestRow.vue'
 import { useRequestsStore } from '@/stores/requests'
 import type { AccessRequest, RequestBox } from '@/types/api'
@@ -29,18 +30,26 @@ const approving = ref<AccessRequest | null>(null)
 const busyId = ref<number | null>(null)
 const rowErrors = ref<Record<number, string>>({})
 
-async function act(request: AccessRequest, action: 'deny' | 'cancel') {
+async function act(request: AccessRequest, action: 'deny' | 'cancel' | 'revoke') {
   busyId.value = request.id
   rowErrors.value = { ...rowErrors.value, [request.id]: '' }
   try {
+    const decidedAt = new Date().toISOString()
     if (action === 'deny') store.replace(await requestsApi.deny(request.id))
-    else {
+    else if (action === 'cancel') {
       await requestsApi.cancel(request.id)
-      store.replace({ ...request, status: 'CANCELLED', decided_at: new Date().toISOString() })
+      store.replace({ ...request, status: 'CANCELLED', decided_at: decidedAt })
+    } else {
+      await requestsApi.revoke(request.id)
+      store.replace({ ...request, status: 'REVOKED', decided_at: decidedAt, items: [] })
     }
     confirmingId.value = null
   } catch (err) {
-    const fallback = action === 'deny' ? 'Could not deny the request.' : 'Could not cancel it.'
+    const fallback = {
+      deny: 'Could not deny the request.',
+      cancel: 'Could not cancel it.',
+      revoke: 'Could not stop access.',
+    }[action]
     rowErrors.value = { ...rowErrors.value, [request.id]: getErrorMessage(err, fallback) }
     await store.load() // it may have changed meanwhile, e.g. cancelled by the other person
   } finally {
@@ -122,6 +131,37 @@ onMounted(() => store.load())
               Cancel request
             </button>
           </template>
+          <template
+            v-else-if="box === 'incoming' && request.status === 'APPROVED' && !request.expired"
+            #actions
+          >
+            <div v-if="confirmingId === request.id" class="confirm" role="alert">
+              <p class="small">
+                Stop {{ request.requester }}'s access now? Every copy shared with them and its key
+                is deleted. The keys you sent stop working.
+              </p>
+              <div class="row">
+                <button
+                  class="danger"
+                  :disabled="busyId === request.id"
+                  @click="act(request, 'revoke')"
+                >
+                  Stop access
+                </button>
+                <button class="secondary" @click="confirmingId = null">Keep it</button>
+              </div>
+            </div>
+            <button v-else class="danger" @click="confirmingId = request.id">Stop access</button>
+          </template>
+          <OwnerGrants
+            v-if="
+              box === 'incoming' &&
+              request.status === 'APPROVED' &&
+              !request.expired &&
+              request.items.length
+            "
+            :request="request"
+          />
           <GrantedItems
             v-if="
               box === 'outgoing' &&
