@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 import { expect, test } from '@playwright/test'
 
-import { PATIENT, signIn } from './helpers.js'
+import { openRecord, PATIENT, signIn } from './helpers.js'
 
 const SAMPLE_PDF = readFileSync(fileURLToPath(new URL('./sample.pdf', import.meta.url)))
 
@@ -37,6 +37,29 @@ test('a PDF uploaded without ticking it is not signed', async ({ page }) => {
   await page.getByRole('button', { name: 'Save record' }).click()
   await expect(page.getByRole('status')).toContainText('lab-result.pdf is saved and encrypted.')
   await expect(page.getByRole('button', { name: /lab-result\.pdf/ })).not.toContainText('Signed')
+})
+
+test('a stored PDF can be signed from its drawer after confirmation', async ({ page }) => {
+  await choosePdf(page)
+  await page.getByRole('button', { name: 'Save record' }).click()
+  await expect(page.getByRole('status')).toContainText('lab-result.pdf is saved and encrypted.')
+
+  const drawer = await openRecord(page, 'lab-result.pdf')
+  await expect(drawer.getByText('Not signed.', { exact: false })).toBeVisible()
+  await drawer.getByRole('button', { name: 'Sign this PDF' }).click()
+  await expect(drawer.getByRole('alert')).toContainText(
+    "This creates your signing key if you don't have one.",
+  )
+
+  await drawer.getByRole('button', { name: 'Not now' }).click()
+  await expect(drawer.getByRole('alert')).toHaveCount(0)
+  await expect(drawer.getByRole('button', { name: 'Sign this PDF' })).toBeVisible()
+
+  await drawer.getByRole('button', { name: 'Sign this PDF' }).click()
+  await drawer.getByRole('button', { name: 'Sign this PDF' }).click()
+
+  await expect(drawer.getByText(/Signed with your private key on/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /lab-result\.pdf/ })).toContainText('Signed')
 })
 
 test('the option is only offered for PDFs', async ({ page }) => {

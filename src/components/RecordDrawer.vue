@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import AsyncButton from '@/components/AsyncButton.vue'
 import CipherDetails from '@/components/CipherDetails.vue'
@@ -7,6 +7,7 @@ import FilePreview from '@/components/FilePreview.vue'
 import { filesApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
 import { useAsyncAction } from '@/composables/useAsyncAction'
+import { isPdf } from '@/config/records'
 import { useFilesStore } from '@/stores/files'
 import type { Algorithm, StoredFile } from '@/types/api'
 import { categoryLabel, downloadBlob, formatBytes, formatDate } from '@/utils/format'
@@ -31,6 +32,23 @@ watch(
 
 function reset() {
   confirmingDelete.value = false
+  confirmingSign.value = false
+  signError.value = ''
+}
+
+// Signing a stored PDF
+const isPdfRecord = computed(() =>
+  isPdf(props.file ? { type: props.file.content_type, name: props.file.original_name } : null),
+)
+const confirmingSign = ref(false)
+const signError = ref('')
+
+async function signNow() {
+  if (!props.file) return
+  confirmingSign.value = false
+  signError.value = ''
+  const signed = await store.sign(props.file.id)
+  if (!signed) signError.value = store.error || 'Could not sign this PDF.'
 }
 
 // Preview
@@ -94,6 +112,39 @@ async function remove() {
         </div>
         <p v-if="download.error.value" class="notice error">{{ download.error.value }}</p>
 
+        <section v-if="isPdfRecord" class="block">
+          <h3>Signature</h3>
+          <p v-if="file.signed" class="small">
+            <span class="signed-mark">Signed</span>
+            with your private key on {{ formatDate(file.signed_at!) }}.
+          </p>
+          <template v-else>
+            <p class="muted small">
+              Not signed. Signing adds your digital signature to this PDF, so anyone can check
+              it came from you and hasn't been changed.
+            </p>
+            <div v-if="confirmingSign" class="confirm" role="alert">
+              <p class="small">
+                Sign this PDF? This creates your signing key if you don't have one. Copies
+                you've already shared stay as they were.
+              </p>
+              <div class="row">
+                <button @click="signNow">Sign this PDF</button>
+                <button class="secondary" @click="confirmingSign = false">Not now</button>
+              </div>
+            </div>
+            <AsyncButton
+              v-else
+              variant="secondary"
+              :loading="store.busyFileId === file.id"
+              label="Sign this PDF"
+              loading-label="Signing and re-encrypting…"
+              @click="confirmingSign = true"
+            />
+            <p v-if="signError" class="notice error small" role="alert">{{ signError }}</p>
+          </template>
+        </section>
+
         <section class="block">
           <h3>Share this record</h3>
           <p class="muted small">
@@ -133,6 +184,16 @@ async function remove() {
 </template>
 
 <style scoped>
+.signed-mark {
+  margin-right: 0.3rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--ok);
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ok);
+}
+
 .drawer {
   margin: 0 0 0 auto;
   height: 100dvh;
