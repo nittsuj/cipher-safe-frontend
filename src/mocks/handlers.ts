@@ -444,6 +444,7 @@ export const handlers = [
         items: grants.map((g) => ({
           item_id: g.id,
           kind: g.kind,
+          file_id: g.file,
           category: db.files.find((f) => f.id === g.file)?.category ?? null,
           envelope: g.envelope,
         })),

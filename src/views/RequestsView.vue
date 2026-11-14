@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { requestsApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
 
+import ApproveDialog from '@/components/ApproveDialog.vue'
 import AskAccessForm from '@/components/AskAccessForm.vue'
 import RequestRow from '@/components/RequestRow.vue'
 import { useRequestsStore } from '@/stores/requests'
@@ -23,6 +24,7 @@ const count = (tab: RequestBox) =>
 
 /** The request whose deny/cancel is waiting for confirmation, and errors per row. */
 const confirmingId = ref<number | null>(null)
+const approving = ref<AccessRequest | null>(null)
 const busyId = ref<number | null>(null)
 const rowErrors = ref<Record<number, string>>({})
 
@@ -112,7 +114,7 @@ onMounted(() => store.load())
               </div>
             </div>
             <template v-else-if="box === 'incoming'">
-              <button disabled title="Coming soon">Approve</button>
+              <button @click="approving = request">Approve</button>
               <button class="secondary" @click="confirmingId = request.id">Deny</button>
             </template>
             <button v-else class="secondary" @click="confirmingId = request.id">
@@ -125,6 +127,8 @@ onMounted(() => store.load())
         </RequestRow>
       </ul>
     </section>
+
+    <ApproveDialog :request="approving" @close="approving = null" @approved="store.replace" />
   </div>
 </template>
 

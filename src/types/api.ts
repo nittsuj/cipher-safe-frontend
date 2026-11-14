@@ -199,6 +199,8 @@ export interface ApproveRequestBody {
 export interface GrantedEnvelope {
   item_id: number
   kind: GrantKind
+  /** The granted record; `null` for the profile. */
+  file_id: number | null
   category: FileCategory | null
   envelope: string
 }
