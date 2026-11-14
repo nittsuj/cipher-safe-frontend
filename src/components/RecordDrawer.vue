@@ -4,12 +4,14 @@ import { computed, ref, watch } from 'vue'
 import AsyncButton from '@/components/AsyncButton.vue'
 import CipherDetails from '@/components/CipherDetails.vue'
 import FilePreview from '@/components/FilePreview.vue'
+import SignatureBadge from '@/components/SignatureBadge.vue'
+import SignatureDetails from '@/components/SignatureDetails.vue'
 import { filesApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { isPdf } from '@/config/records'
 import { useFilesStore } from '@/stores/files'
-import type { Algorithm, StoredFile } from '@/types/api'
+import type { Algorithm, SignatureCheck, StoredFile } from '@/types/api'
 import { categoryLabel, downloadBlob, formatBytes, formatDate } from '@/utils/format'
 
 const props = defineProps<{ file: StoredFile | null }>()
@@ -34,6 +36,8 @@ function reset() {
   confirmingDelete.value = false
   confirmingSign.value = false
   signError.value = ''
+  signature.value = null
+  if (props.file?.signed) checkSignature.run()
 }
 
 // Signing a stored PDF
@@ -49,10 +53,25 @@ async function signNow() {
   signError.value = ''
   const signed = await store.sign(props.file.id)
   if (!signed) signError.value = store.error || 'Could not sign this PDF.'
+  else checkSignature.run()
 }
 
+// Checking a signed PDF: decrypted and checked on the server when the drawer opens
+const signature = ref<SignatureCheck | null>(null)
+const checkSignature = useAsyncAction(async () => {
+  const id = props.file?.id
+  if (id === undefined) return
+  const result = await filesApi.signature(id)
+  if (props.file?.id === id) signature.value = result // ignore a late answer for another record
+}, 'Could not check the signature.')
+
 // Preview
-const preview = ref({ open: false, blob: null as Blob | null, filename: null as string | null, error: '' })
+const preview = ref({
+  open: false,
+  blob: null as Blob | null,
+  filename: null as string | null,
+  error: '',
+})
 const previewing = ref(false)
 
 async function openPreview() {
@@ -95,7 +114,9 @@ async function remove() {
       <header class="drawer-head" :data-cat="file.category">
         <span class="cat">{{ categoryLabel(file.category) }}</span>
         <h2>{{ file.original_name }}</h2>
-        <p class="muted small">{{ formatBytes(file.plaintext_size) }}, added {{ formatDate(file.created_at) }}</p>
+        <p class="muted small">
+          {{ formatBytes(file.plaintext_size) }}, added {{ formatDate(file.created_at) }}
+        </p>
         <button class="close secondary" aria-label="Close" @click="emit('close')">✕</button>
       </header>
 
@@ -114,19 +135,41 @@ async function remove() {
 
         <section v-if="isPdfRecord" class="block">
           <h3>Signature</h3>
-          <p v-if="file.signed" class="small">
-            <span class="signed-mark">Signed</span>
-            with your private key on {{ formatDate(file.signed_at!) }}.
-          </p>
+          <template v-if="file.signed">
+            <div class="sig-row">
+              <SignatureBadge
+                v-if="signature"
+                :status="signature.status"
+                :signer="signature.signer?.common_name"
+              />
+              <span v-else-if="checkSignature.loading.value" class="muted small"
+                >Checking signature…</span
+              >
+              <AsyncButton
+                variant="secondary"
+                :loading="checkSignature.loading.value"
+                label="Check again"
+                loading-label="Checking…"
+                @click="checkSignature.run()"
+              />
+            </div>
+            <p class="muted small">
+              Signed with your private key on {{ formatDate(file.signed_at!) }}.
+            </p>
+            <p v-if="checkSignature.error.value" class="notice error small" role="alert">
+              {{ checkSignature.error.value }}
+            </p>
+            <SignatureDetails v-if="signature" :check="signature" />
+          </template>
           <template v-else>
             <p class="muted small">
-              Not signed. Signing adds your digital signature to this PDF, so anyone can check
-              it came from you and hasn't been changed.
+              Not signed. Signing adds your digital signature to this PDF, so anyone can check it
+              came from you and hasn't been changed.
             </p>
             <div v-if="confirmingSign" class="confirm" role="alert">
               <p class="small">
-                Sign this PDF? This creates your signing key if you don't have one. Copies
-                you've already shared stay as they were.
+                Sign this PDF? This creates your signing key if you don't have one. Copies you've
+                already shared stay as they were.
               </p>
               <div class="row">
                 <button @click="signNow">Sign this PDF</button>
@@ -161,7 +204,10 @@ async function remove() {
             <button class="danger" @click="confirmingDelete = true">Delete record</button>
           </template>
           <div v-else class="confirm" role="alert">
-            <p>Delete <strong>{{ file.original_name }}</strong> and every copy shared from it? This can't be undone.</p>
+            <p>
+              Delete <strong>{{ file.original_name }}</strong> and every copy shared from it? This
+              can't be undone.
+            </p>
             <div class="row">
               <button class="danger" @click="remove">Delete for good</button>
               <button class="secondary" @click="confirmingDelete = false">Keep it</button>
@@ -184,14 +230,12 @@ async function remove() {
 </template>
 
 <style scoped>
-.signed-mark {
-  margin-right: 0.3rem;
-  padding: 0 0.45rem;
-  border: 1px solid var(--ok);
-  border-radius: 99px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ok);
+.sig-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
 }
 
 .drawer {
