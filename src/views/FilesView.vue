@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import AsyncButton from '@/components/AsyncButton.vue'
 import RecordDrawer from '@/components/RecordDrawer.vue'
 import { useFilesStore } from '@/stores/files'
-import { FILE_CATEGORIES } from '@/config/records'
+import { FILE_CATEGORIES, isPdf } from '@/config/records'
 import type { FileCategory, StoredFile } from '@/types/api'
 import { categoryLabel, formatBytes, formatDay } from '@/utils/format'
 
@@ -22,10 +22,14 @@ const pending = ref<File | null>(null)
 const category = ref<FileCategory>('DOCUMENT')
 const dragging = ref(false)
 const uploaded = ref('')
+/** Sign the PDF with my private key before it's encrypted. Off by default. */
+const sign = ref(false)
+const canSign = computed(() => isPdf(pending.value))
 
 function pick(file: File | null | undefined) {
   pending.value = file ?? null
   uploaded.value = ''
+  sign.value = false // a new file starts unsigned
   if (file?.type.startsWith('video/')) category.value = 'VIDEO'
 }
 
@@ -36,10 +40,13 @@ function onDrop(event: DragEvent) {
 
 async function submitUpload() {
   if (!pending.value) return
-  const created = await store.upload(pending.value, category.value)
+  const created = await store.upload(pending.value, category.value, canSign.value && sign.value)
   if (created) {
-    uploaded.value = `${created.original_name} is saved and encrypted.`
+    uploaded.value = created.signed
+      ? `${created.original_name} is signed, saved and encrypted.`
+      : `${created.original_name} is saved and encrypted.`
     pending.value = null
+    sign.value = false
     if (fileInput.value) fileInput.value.value = ''
   }
 }
@@ -98,6 +105,16 @@ onMounted(store.load)
         </label>
       </fieldset>
 
+      <label v-if="canSign" class="sign-option">
+        <input v-model="sign" type="checkbox" />
+        <span>
+          Digitally sign this PDF
+          <span class="hint">
+            Signed with your private key. Anyone can check it hasn't been changed.
+          </span>
+        </span>
+      </label>
+
       <AsyncButton
         type="submit"
         :loading="store.uploading"
@@ -149,7 +166,10 @@ onMounted(store.load)
           <span class="folder-body">
             <span class="name">{{ file.original_name }}</span>
             <span class="meta">
-              <span>{{ formatBytes(file.plaintext_size) }}</span>
+              <span>
+                {{ formatBytes(file.plaintext_size) }}
+                <span v-if="file.signed" class="signed-mark">Signed</span>
+              </span>
               <span>{{ formatDay(file.created_at) }}</span>
             </span>
           </span>
@@ -259,6 +279,38 @@ onMounted(store.load)
 
 [data-cat='VIDEO'] {
   --cat: var(--tab-video);
+}
+
+.sign-option {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sign-option input {
+  width: auto;
+  min-height: 0;
+  margin-top: 0.3rem;
+  accent-color: var(--accent);
+}
+
+.sign-option .hint {
+  display: block;
+  font-weight: 400;
+}
+
+.signed-mark {
+  margin-left: 0.4rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--ok);
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ok);
 }
 
 .filters {
