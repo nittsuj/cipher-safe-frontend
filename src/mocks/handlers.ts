@@ -21,6 +21,8 @@ import {
   addRequest,
   addFile,
   addGrant,
+  isSignablePdf,
+  markSigned,
   createKeyPair,
   createUser,
   db,
@@ -538,14 +540,27 @@ export const handlers = [
 
       const upload = file as File
       const data = new Uint8Array(await upload.arrayBuffer())
-      const stored = addFile(
-        user.id,
-        category,
-        upload.name,
-        upload.type || 'application/octet-stream',
-        data,
-      )
+      const contentType = upload.type || 'application/octet-stream'
+      const sign = form.get('sign') === 'true'
+      if (sign && !isSignablePdf(contentType, data))
+        throw new HttpError(400, { file: ['Only PDF files can be signed.'] })
+      const stored = addFile(user.id, category, upload.name, contentType, data)
+      if (sign) markSigned(stored)
       return HttpResponse.json(serializeFile(stored), { status: 201 })
+    }),
+  ),
+
+  http.post(
+    api('/files/:id/sign/'),
+    guard(async ({ request, params }) => {
+      const user = patientWithPassword(request)
+      const file = ownFile(user, params.id)
+      if (!isSignablePdf(file.contentType, file.data))
+        throw new HttpError(400, { file: ['Only PDF files can be signed.'] })
+      if (file.signedAt) throw detail(409, 'This PDF is already signed in Cipher Safe.')
+      await delay(300) // signing and re-encrypting three copies takes a moment
+      markSigned(file)
+      return HttpResponse.json(serializeFile(file))
     }),
   ),
 
