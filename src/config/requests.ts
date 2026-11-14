@@ -53,3 +53,20 @@ export function parseEnvelope(text: string): { requestId: number; itemId: number
   if (!/^\d+$/.test(request) || !/^\d+$/.test(item) || !/^[A-Za-z0-9_-]+$/.test(key)) return null
   return { requestId: Number(request), itemId: Number(item) }
 }
+
+/** The message an owner sends with a key, for WhatsApp, email or the share sheet. */
+export function envelopeMessage(itemTitle: string, envelope: string): string {
+  return (
+    `Here is the Cipher Safe key for "${itemTitle}". ` +
+    `Open Cipher Safe, go to Requests, Outgoing, and paste it under Enter key:\n\n${envelope}`
+  )
+}
+
+/** Links that open WhatsApp or the mail app with the key filled in. */
+export function envelopeShareLinks(itemTitle: string, envelope: string) {
+  const text = envelopeMessage(itemTitle, envelope)
+  return {
+    whatsapp: `https://wa.me/?text=${encodeURIComponent(text)}`,
+    email: `mailto:?subject=${encodeURIComponent(`Cipher Safe key: ${itemTitle}`)}&body=${encodeURIComponent(text)}`,
+  }
+}

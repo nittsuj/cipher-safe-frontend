@@ -46,3 +46,16 @@ test('closing the dialog without approving changes nothing', async ({ page }) =>
   await expect(dialog).toBeHidden()
   await expect(row).toContainText('Waiting')
 })
+
+test('a key can be sent by WhatsApp or email with the key filled in', async ({ page }) => {
+  const { dialog } = await openApprove(page)
+  await dialog.getByRole('checkbox', { name: /lab-result-hba1c\.txt/ }).check()
+  await dialog.getByRole('button', { name: 'Approve and make keys' }).click()
+
+  const card = dialog.getByRole('article', { name: 'Key for lab-result-hba1c.txt' })
+  const envelope = await card.getByRole('textbox').inputValue()
+  const whatsapp = await card.getByRole('link', { name: 'WhatsApp' }).getAttribute('href')
+  const email = await card.getByRole('link', { name: 'Email' }).getAttribute('href')
+  expect(new URL(whatsapp!).searchParams.get('text')).toContain(envelope)
+  expect(decodeURIComponent(email!)).toContain(envelope)
+})

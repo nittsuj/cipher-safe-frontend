@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import { envelopeMessage, envelopeShareLinks } from '@/config/requests'
 import { formatFingerprint } from '@/utils/format'
 
 /**
@@ -18,6 +19,21 @@ const props = defineProps<{
 const copied = ref(false)
 
 const groups = computed(() => formatFingerprint(props.fingerprint).split(' '))
+const links = computed(() => envelopeShareLinks(props.title, props.envelope))
+
+/** The phone's share sheet when the browser has one; otherwise the links below. */
+const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+
+async function share() {
+  try {
+    await navigator.share({
+      title: `Cipher Safe key: ${props.title}`,
+      text: envelopeMessage(props.title, props.envelope),
+    })
+  } catch {
+    // Closing the share sheet throws AbortError; nothing to do.
+  }
+}
 
 async function copy() {
   await navigator.clipboard.writeText(props.envelope)
@@ -41,6 +57,13 @@ async function copy() {
     />
     <div class="row">
       <button @click="copy">{{ copied ? 'Copied' : 'Copy key' }}</button>
+      <button v-if="canShare" class="secondary" @click="share">Share via…</button>
+      <template v-else>
+        <a class="button secondary" :href="links.whatsapp" target="_blank" rel="noopener noreferrer"
+          >WhatsApp</a
+        >
+        <a class="button secondary" :href="links.email">Email</a>
+      </template>
       <slot name="actions" />
     </div>
     <p class="small muted">

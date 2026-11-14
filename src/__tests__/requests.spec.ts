@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { requestsApi } from '@/api/cipherSafe'
 import {
   REQUEST_STATUSES,
+  envelopeMessage,
+  envelopeShareLinks,
   parseEnvelope,
   requestCategoryLabel,
   requestStatus,
@@ -126,5 +128,26 @@ describe('parseEnvelope', () => {
     ]) {
       expect(parseEnvelope(text)).toBeNull()
     }
+  })
+})
+
+describe('sharing a key outside the app', () => {
+  const envelope = 'CSK1.7.21.Zm9v_bar-baz'
+
+  it('puts the whole envelope in the message', () => {
+    const message = envelopeMessage('lab.pdf', envelope)
+    expect(message).toContain('"lab.pdf"')
+    expect(message.endsWith(envelope)).toBe(true)
+  })
+
+  it('builds WhatsApp and email links that carry the exact envelope', () => {
+    const links = envelopeShareLinks('lab & scan.pdf', envelope)
+    const whatsapp = new URL(links.whatsapp)
+    expect(whatsapp.origin).toBe('https://wa.me')
+    expect(whatsapp.searchParams.get('text')).toBe(envelopeMessage('lab & scan.pdf', envelope))
+
+    expect(links.email.startsWith('mailto:?subject=')).toBe(true)
+    const body = new URLSearchParams(links.email.slice('mailto:?'.length)).get('body')
+    expect(body).toBe(envelopeMessage('lab & scan.pdf', envelope))
   })
 })
