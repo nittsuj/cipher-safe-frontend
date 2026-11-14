@@ -52,6 +52,9 @@ export interface StoredFile {
   plaintext_size: number
   created_at: string
   ciphertexts: FileCiphertext[]
+  /** Carries a Cipher Safe signature (made with the owner's signing key). */
+  signed: boolean
+  signed_at: string | null
 }
 
 export interface PersonalData {

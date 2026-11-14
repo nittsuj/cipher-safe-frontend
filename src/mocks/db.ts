@@ -181,6 +181,8 @@ export function serializeFile(file: MockFile): StoredFile {
     plaintext_size: file.data.length,
     created_at: file.created_at,
     ciphertexts: file.ciphertexts,
+    signed: false, // signing isn't in the mock yet
+    signed_at: null,
   }
 }
 
