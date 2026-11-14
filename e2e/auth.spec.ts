@@ -18,7 +18,7 @@ test('registers a patient and lands on their empty vault', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'No records yet' })).toBeVisible()
 })
 
-test('registers a doctor and lands on the shared page', async ({ page }) => {
+test('registers a doctor and lands on the Requests page', async ({ page }) => {
   await page.getByRole('link', { name: 'Create an account' }).click()
   await page.getByRole('radio', { name: /Doctor/ }).check()
   await page.getByLabel('Username').fill('dr-ana')
@@ -26,7 +26,7 @@ test('registers a doctor and lands on the shared page', async ({ page }) => {
   await page.getByLabel('Type it again').fill('ana-password-1')
   await page.getByRole('button', { name: 'Create account' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Shared with me' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Requests' })).toBeVisible()
 })
 
 test('rejects a wrong password', async ({ page }) => {
@@ -39,4 +39,18 @@ test('signs in and out', async ({ page }) => {
   await signIn(page, PATIENT)
   await expect(page.getByRole('heading', { name: 'Your records' })).toBeVisible()
   await signOut(page)
+})
+
+test('a doctor lands on the Requests page, and the old share page redirects there', async ({
+  page,
+}) => {
+  await signIn(page, { username: 'doctor', password: 'doctor-password' })
+  await expect(page).toHaveURL(/\/requests$/)
+  await expect(page.getByRole('heading', { name: 'Requests' })).toBeVisible()
+  await expect(
+    page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Shared with me' }),
+  ).toHaveCount(0)
+
+  await page.getByRole('link', { name: 'Cipher Safe' }).click()
+  await expect(page).toHaveURL(/\/requests$/)
 })

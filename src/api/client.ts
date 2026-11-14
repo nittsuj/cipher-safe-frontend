@@ -66,7 +66,7 @@ interface RequestOptions {
   json?: unknown
   form?: FormData
   signal?: AbortSignal
-  /** Extra request headers, e.g. the doctor's X-Share-Key. */
+  /** Extra request headers. */
   headers?: Record<string, string>
 }
 

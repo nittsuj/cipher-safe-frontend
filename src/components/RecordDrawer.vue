@@ -4,7 +4,6 @@ import { ref, watch } from 'vue'
 import AsyncButton from '@/components/AsyncButton.vue'
 import CipherDetails from '@/components/CipherDetails.vue'
 import FilePreview from '@/components/FilePreview.vue'
-import ShareSection from '@/components/ShareSection.vue'
 import { filesApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
 import { useAsyncAction } from '@/composables/useAsyncAction'
@@ -95,7 +94,14 @@ async function remove() {
         </div>
         <p v-if="download.error.value" class="notice error">{{ download.error.value }}</p>
 
-        <ShareSection :file-id="file.id" />
+        <section class="block">
+          <h3>Share this record</h3>
+          <p class="muted small">
+            Someone who needs it asks you on the
+            <RouterLink to="/requests">Requests page</RouterLink>; you approve and send them a key
+            only they can open.
+          </p>
+        </section>
 
         <CipherDetails :file="file" />
 
@@ -104,7 +110,7 @@ async function remove() {
             <button class="danger" @click="confirmingDelete = true">Delete record</button>
           </template>
           <div v-else class="confirm" role="alert">
-            <p>Delete <strong>{{ file.original_name }}</strong> and every shared copy? This can't be undone.</p>
+            <p>Delete <strong>{{ file.original_name }}</strong> and every copy shared from it? This can't be undone.</p>
             <div class="row">
               <button class="danger" @click="remove">Delete for good</button>
               <button class="secondary" @click="confirmingDelete = false">Keep it</button>

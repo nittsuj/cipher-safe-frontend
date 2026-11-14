@@ -107,32 +107,6 @@ export interface BenchmarkResult {
   cipher_mean_ms: number
 }
 
-export interface FileShare {
-  id: number
-  file: number
-  doctor: string
-  created_at: string
-  expires_at: string
-  active: boolean
-  access_count: number
-  last_accessed_at: string | null
-}
-
-export interface CreatedShare extends FileShare {
-  /** Shown once; the server does not keep it. */
-  share_key: string
-}
-
-export interface ReceivedShare {
-  id: number
-  patient: string
-  category: FileCategory
-  plaintext_size: number
-  created_at: string
-  expires_at: string
-  access_count: number
-}
-
 /** One bar in an algorithm comparison chart. */
 export interface BarRow {
   algorithm: Algorithm
