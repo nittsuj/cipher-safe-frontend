@@ -7,8 +7,11 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import { useAuthStore } from '@/stores/auth'
 import type { KeyPair, KeyPurpose } from '@/types/api'
 
-/** "My keys": the user's key pairs, public parts only. */
-const PURPOSES: KeyPurpose[] = ['ENCRYPTION', 'SIGNING']
+/** "My keys": the user's key pairs, public parts only. `purposes` picks the
+ * cards: doctors only get the encryption key, since they don't sign records. */
+const props = withDefaults(defineProps<{ purposes?: KeyPurpose[] }>(), {
+  purposes: () => ['ENCRYPTION', 'SIGNING'],
+})
 
 const pairs = ref<Partial<Record<KeyPurpose, KeyPair>>>({})
 const rotatingPurpose = ref<KeyPurpose | null>(null)
@@ -50,7 +53,7 @@ onMounted(() => load.run())
     <p v-if="load.loading.value" class="muted">Loading your keys…</p>
     <div v-else class="cards">
       <KeyCard
-        v-for="purpose in PURPOSES"
+        v-for="purpose in props.purposes"
         :key="purpose"
         :purpose="purpose"
         :pair="pairs[purpose] ?? null"

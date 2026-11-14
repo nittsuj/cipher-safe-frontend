@@ -7,12 +7,15 @@ import { getErrorMessage } from '@/api/client'
 import ApproveDialog from '@/components/ApproveDialog.vue'
 import AskAccessForm from '@/components/AskAccessForm.vue'
 import GrantedItems from '@/components/GrantedItems.vue'
+import MyKeys from '@/components/MyKeys.vue'
 import OwnerGrants from '@/components/OwnerGrants.vue'
 import RequestRow from '@/components/RequestRow.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useRequestsStore } from '@/stores/requests'
 import type { AccessRequest, RequestBox } from '@/types/api'
 
 const store = useRequestsStore()
+const auth = useAuthStore()
 const box = ref<RequestBox>('incoming')
 
 const TABS: { box: RequestBox; label: string }[] = [
@@ -178,6 +181,10 @@ onMounted(() => store.load())
         </RequestRow>
       </ul>
     </section>
+
+    <!-- Patients see My keys on their Profile page; doctors have no Profile, so
+         their key and its fingerprint (for owners to compare) live here. -->
+    <MyKeys v-if="auth.isDoctor" :purposes="['ENCRYPTION']" />
 
     <ApproveDialog :request="approving" @close="approving = null" @approved="store.replace" />
   </div>
