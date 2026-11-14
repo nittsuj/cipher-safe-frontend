@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { authApi } from '@/api/cipherSafe'
+import { authApi, keysApi } from '@/api/cipherSafe'
 import { setCredentialsProvider, setTokenRefresher } from '@/api/client'
 import type { Credentials, Role, User } from '@/types/api'
 
@@ -11,6 +11,11 @@ import type { Credentials, Role, User } from '@/types/api'
  * The access token, refresh token and password all live in memory only; nothing
  * is persisted to storage, so a page reload always requires signing in again.
  * That keeps the password (which derives every encryption key) out of disk.
+ *
+ * After signing in it makes sure the user has an **encryption key pair**, once
+ * per session and in the background. Someone can only approve a request from
+ * this user once that key exists, and the server can't create it without the
+ * user's password.
  */
 export const useAuthStore = defineStore('auth', () => {
   const access = ref<string | null>(null)
@@ -56,6 +61,21 @@ export const useAuthStore = defineStore('auth', () => {
 
   setTokenRefresher(refreshAccessToken)
 
+  /** The once-per-session key check; `null` until the user signs in. */
+  let encryptionKeyCheck: Promise<void> | null = null
+
+  /** Make sure the user has an encryption key. Best effort: a failure only
+   * means approvals wait until the next sign-in, so it never blocks the UI. */
+  function ensureEncryptionKey(): Promise<void> {
+    encryptionKeyCheck ??= keysApi.ensure('ENCRYPTION').then(
+      () => undefined,
+      () => {
+        encryptionKeyCheck = null // try again next time
+      },
+    )
+    return encryptionKeyCheck
+  }
+
   function setSession(
     response: { user: User; access: string; refresh: string },
     plainPassword: string,
@@ -64,6 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
     refresh.value = response.refresh
     user.value = response.user
     password.value = plainPassword
+    void ensureEncryptionKey()
   }
 
   async function login(username: string, plainPassword: string) {
@@ -91,6 +112,7 @@ export const useAuthStore = defineStore('auth', () => {
     refresh.value = null
     user.value = null
     password.value = null
+    encryptionKeyCheck = null
   }
 
   return {
@@ -105,5 +127,6 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout,
     clear,
+    ensureEncryptionKey,
   }
 })

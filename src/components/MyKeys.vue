@@ -4,6 +4,7 @@ import { onMounted, ref } from 'vue'
 import KeyCard from '@/components/KeyCard.vue'
 import { keysApi } from '@/api/cipherSafe'
 import { useAsyncAction } from '@/composables/useAsyncAction'
+import { useAuthStore } from '@/stores/auth'
 import type { KeyPair, KeyPurpose } from '@/types/api'
 
 /** "My keys": the user's key pairs, public parts only. */
@@ -12,7 +13,12 @@ const PURPOSES: KeyPurpose[] = ['ENCRYPTION', 'SIGNING']
 const pairs = ref<Partial<Record<KeyPurpose, KeyPair>>>({})
 const rotatingPurpose = ref<KeyPurpose | null>(null)
 
+const auth = useAuthStore()
+
 const load = useAsyncAction(async () => {
+  // Right after sign-in the encryption key may still be being made; wait for
+  // it so the card doesn't briefly say there is none.
+  await auth.ensureEncryptionKey()
   const list = await keysApi.list()
   pairs.value = Object.fromEntries(list.map((pair) => [pair.purpose, pair]))
 }, 'Could not load your keys.')
