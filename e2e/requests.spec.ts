@@ -82,7 +82,7 @@ test('the patient denies the request and the doctor sees it was denied', async (
     .getByRole('link', { name: /Requests/ })
     .click()
   const row = page.getByRole('listitem').filter({ hasText: `From ${DOCTOR.username}` })
-  await expect(row.getByRole('button', { name: 'Approve' })).toBeDisabled()
+  await expect(row.getByRole('button', { name: 'Approve' })).toBeEnabled()
 
   await row.getByRole('button', { name: 'Deny' }).click()
   await expect(row.getByRole('alert')).toContainText('They can ask again later')
