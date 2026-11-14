@@ -77,11 +77,22 @@ export const filesApi = {
     return requestJson<StoredFile>(`/api/files/${id}/`)
   },
 
-  upload(file: File, category: FileCategory): Promise<StoredFile> {
+  /** Upload a record; with `sign` a PDF is signed with my signing key before it is encrypted. */
+  upload(
+    file: File,
+    category: FileCategory,
+    options: { sign?: boolean } = {},
+  ): Promise<StoredFile> {
     const form = new FormData()
     form.append('file', file)
     form.append('category', category)
+    if (options.sign) form.append('sign', 'true')
     return requestJson<StoredFile>('/api/files/', { method: 'POST', form })
+  },
+
+  /** Sign a stored PDF; every encrypted copy is replaced by the signed file. */
+  sign(id: number): Promise<StoredFile> {
+    return requestJson<StoredFile>(`/api/files/${id}/sign/`, { method: 'POST' })
   },
 
   remove(id: number): Promise<void> {

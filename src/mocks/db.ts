@@ -37,6 +37,8 @@ export interface MockFile {
   data: Uint8Array
   created_at: string
   ciphertexts: FileCiphertext[]
+  /** When it was "signed". The mock only marks it; the bytes don't change. */
+  signedAt: string | null
 }
 
 export interface MockRequest extends Omit<
@@ -161,6 +163,7 @@ export function addFile(
     contentType,
     data,
     created_at: now(),
+    signedAt: null,
     ciphertexts: ALGORITHMS.map((algorithm) => ({
       algorithm,
       mode: MODE_FOR[algorithm],
@@ -181,6 +184,8 @@ export function serializeFile(file: MockFile): StoredFile {
     plaintext_size: file.data.length,
     created_at: file.created_at,
     ciphertexts: file.ciphertexts,
+    signed: file.signedAt !== null,
+    signed_at: file.signedAt,
   }
 }
 
@@ -285,6 +290,18 @@ export function addGrant(request: MockRequest, file: MockFile | null): MockGrant
   }
   db.grants.push(grant)
   return grant
+}
+
+/** Same rule as the backend: only real PDFs (type and `%PDF-` bytes) can be signed. */
+export function isSignablePdf(contentType: string, data: Uint8Array): boolean {
+  const magic = String.fromCharCode(...data.slice(0, 5))
+  return contentType === 'application/pdf' && magic === '%PDF-'
+}
+
+/** Mark a record signed, creating the user's signing key the first time. */
+export function markSigned(file: MockFile): void {
+  if (!activeKeyPair(file.owner, 'SIGNING')) createKeyPair(file.owner, 'SIGNING')
+  file.signedAt = now()
 }
 
 // ------------------------------------------------------------------- seed

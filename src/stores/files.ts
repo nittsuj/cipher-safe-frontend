@@ -43,16 +43,31 @@ export const useFilesStore = defineStore('files', () => {
   async function upload(
     file: File,
     category: FileCategory,
+    sign = false,
   ): Promise<StoredFile | undefined> {
     uploading.value = true
     try {
       return await run('Upload failed.', async () => {
-        const created = await filesApi.upload(file, category)
+        const created = await filesApi.upload(file, category, { sign })
         await load()
         return created
       })
     } finally {
       uploading.value = false
+    }
+  }
+
+  /** Sign a stored PDF and update it in the list. */
+  async function sign(id: number): Promise<StoredFile | undefined> {
+    busyFileId.value = id
+    try {
+      return await run('Could not sign this PDF.', async () => {
+        const signed = await filesApi.sign(id)
+        items.value = items.value.map((item) => (item.id === id ? signed : item))
+        return signed
+      })
+    } finally {
+      busyFileId.value = null
     }
   }
 
@@ -105,6 +120,7 @@ export const useFilesStore = defineStore('files', () => {
     error,
     load,
     upload,
+    sign,
     remove,
     benchmark,
     download,

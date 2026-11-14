@@ -98,7 +98,9 @@ can click through all screens. Sign in with:
 | Patient (has a profile and 2 records) | `patient` | `patient-password` |
 | Doctor | `doctor` | `doctor-password` |
 
-The mock does no real cryptography: "encrypted" copies are scrambled bytes and
+The mock does no real cryptography: "encrypted" copies are scrambled bytes,
+keys and envelopes are random, signing only marks a PDF as signed (the bytes
+don't change, so there is no real signature to check in a PDF reader), and
 timings are made up, so don't use its numbers in the report. Data lives in
 memory and resets when you reload the page. Production builds don't include it.
 

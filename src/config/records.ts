@@ -23,3 +23,9 @@ export const PREVIEWABLE_TYPES = [
   'video/ogg',
   'text/plain',
 ] as const
+
+/** Whether a file is a PDF that can be signed: by its type, or a `.pdf` name. */
+export function isPdf(file: { type?: string; name?: string } | null | undefined): boolean {
+  if (!file) return false
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name ?? '')
+}
