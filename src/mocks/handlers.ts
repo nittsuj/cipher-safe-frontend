@@ -33,6 +33,7 @@ import {
   scramble,
   serializeFile,
   serializeRequest,
+  signatureCheck,
   type MockGrant,
   type MockRequest,
   type MockUser,
@@ -134,6 +135,22 @@ function fileResponse(data: Uint8Array, contentType: string, filename: string, i
       'Content-Disposition': contentDisposition(!previewable, filename),
       'X-Content-Type': contentType,
       'Cache-Control': 'no-store',
+    },
+  })
+}
+
+/** Mirrors `certificate_response()`: a `.cer` download, 404 without a signing key.
+ * The bytes are a placeholder, not a real certificate. */
+function certificateResponse(user: MockUser) {
+  const pair = activeKeyPair(user.id, 'SIGNING')
+  if (!pair) throw detail(404, 'No signing certificate yet.')
+  const body = new TextEncoder().encode(
+    `Mock certificate for ${user.username}\n${pair.fingerprint}\n`,
+  )
+  return new HttpResponse(body.buffer as ArrayBuffer, {
+    headers: {
+      'Content-Type': 'application/pkix-cert',
+      'Content-Disposition': contentDisposition(true, `cipher-safe-${user.username}.cer`),
     },
   })
 }
@@ -294,6 +311,24 @@ export const handlers = [
         fingerprint,
         public_key_pem,
       })
+    }),
+  ),
+
+  http.get(
+    api('/me/keys/certificate/'),
+    guard(({ request }) => {
+      const user = currentUser(request)
+      return certificateResponse(user)
+    }),
+  ),
+
+  http.get(
+    api('/users/:username/certificate/'),
+    guard(({ request, params }) => {
+      currentUser(request)
+      const owner = db.users.find((u) => u.username === params.username)
+      if (!owner) throw detail(404, 'Not found.')
+      return certificateResponse(owner)
     }),
   ),
 
@@ -485,6 +520,24 @@ export const handlers = [
     }),
   ),
 
+  http.get(
+    api('/access-requests/:id/items/:itemId/signature/'),
+    guard(({ request, params }) => {
+      const user = currentUser(request)
+      requirePassword(request, user)
+      const accessRequest = requestFor(user, params.id)
+      if (accessRequest.requester !== user.id) throw detail(403, 'Only the requester can do this.')
+      const grant = liveGrant(accessRequest, params.itemId)
+      if (!grant.redeemed) throw detail(403, 'Enter the key the owner sent you first.')
+      // Checking doesn't count as an access.
+      const file = grant.kind === 'FILE' ? db.files.find((f) => f.id === grant.file) : undefined
+      if (!file || !isSignablePdf(file.contentType, file.data))
+        throw new HttpError(400, { file: 'Only PDFs have signatures.' })
+      const owner = db.users.find((u) => u.id === accessRequest.owner)!
+      return HttpResponse.json(signatureCheck(file, owner.username))
+    }),
+  ),
+
   // ----- patient profile
   http.get(
     api('/me/personal-data/'),
@@ -561,6 +614,17 @@ export const handlers = [
       await delay(300) // signing and re-encrypting three copies takes a moment
       markSigned(file)
       return HttpResponse.json(serializeFile(file))
+    }),
+  ),
+
+  http.get(
+    api('/files/:id/signature/'),
+    guard(({ request, params }) => {
+      const user = patientWithPassword(request)
+      const file = ownFile(user, params.id)
+      if (!isSignablePdf(file.contentType, file.data))
+        throw new HttpError(400, { file: 'Only PDFs have signatures.' })
+      return HttpResponse.json({ ...signatureCheck(file, user.username), signed_at: file.signedAt })
     }),
   ),
 

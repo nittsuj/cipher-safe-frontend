@@ -6,7 +6,7 @@ import { DOCTOR, PATIENT, signIn, signOut } from './helpers.js'
  * As the patient: approve the seeded request with the lab result and the
  * profile, read both keys, then switch to the doctor's Outgoing tab.
  */
-async function approveThenSwitchToDoctor(page: Page) {
+async function approveThenSwitchToDoctor(page: Page, recordName = 'lab-result-hba1c.txt') {
   await page.goto('/')
   await signIn(page, PATIENT)
   await page
@@ -19,7 +19,7 @@ async function approveThenSwitchToDoctor(page: Page) {
     .getByRole('button', { name: 'Approve' })
     .click()
   const dialog = page.getByRole('dialog', { name: `Approve ${DOCTOR.username}'s request` })
-  await dialog.getByRole('checkbox', { name: /lab-result-hba1c\.txt/ }).check()
+  await dialog.getByRole('checkbox', { name: recordName }).check()
   await dialog.getByRole('checkbox', { name: /My profile/ }).check()
   await dialog.getByRole('button', { name: 'Approve and make keys' }).click()
   const keyFor = (title: string) =>
@@ -28,7 +28,7 @@ async function approveThenSwitchToDoctor(page: Page) {
       .getByRole('textbox')
       .inputValue()
   const keys = {
-    record: await keyFor('lab-result-hba1c.txt'),
+    record: await keyFor(recordName),
     profile: await keyFor('Your profile'),
   }
   await dialog.getByRole('button', { name: 'Done' }).click()
@@ -88,4 +88,33 @@ test('a key for another item or a garbled key is refused', async ({ page }) => {
   await record.getByRole('button', { name: 'Use key' }).click()
   await expect(record.getByRole('alert')).toContainText('This key is not for this item')
   await expect(record.getByRole('button', { name: 'Open' })).toHaveCount(0)
+})
+
+test('the doctor checks the signature on a shared signed PDF', async ({ page }) => {
+  const { keys, row } = await approveThenSwitchToDoctor(page, 'discharge-summary.pdf')
+  const record = row.getByRole('listitem').filter({ hasText: 'Medical document' })
+  await record.getByRole('button', { name: 'Enter key' }).click()
+  await record.getByLabel('Key for Medical document').fill(keys.record)
+  await record.getByRole('button', { name: 'Use key' }).click()
+
+  await record.getByRole('button', { name: 'Check signature' }).click()
+  await expect(record.getByRole('status', { name: 'Signed by patient, unchanged' })).toBeVisible()
+  // Checking isn't opening.
+  await expect(record).toContainText('opened 0×')
+
+  await record.getByText('Signature details').click()
+  const download = page.waitForEvent('download')
+  await record.getByRole('button', { name: 'Download certificate (.cer)' }).click()
+  expect((await download).suggestedFilename()).toBe('cipher-safe-patient.cer')
+})
+
+test('checking a shared text record says only PDFs have signatures', async ({ page }) => {
+  const { keys, row } = await approveThenSwitchToDoctor(page)
+  const record = row.getByRole('listitem').filter({ hasText: 'Medical document' })
+  await record.getByRole('button', { name: 'Enter key' }).click()
+  await record.getByLabel('Key for Medical document').fill(keys.record)
+  await record.getByRole('button', { name: 'Use key' }).click()
+
+  await record.getByRole('button', { name: 'Check signature' }).click()
+  await expect(record.getByRole('alert')).toContainText('Only PDFs have signatures.')
 })

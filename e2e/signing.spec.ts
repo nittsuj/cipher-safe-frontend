@@ -70,3 +70,23 @@ test('the option is only offered for PDFs', async ({ page }) => {
   await choosePdf(page)
   await expect(page.getByRole('checkbox', { name: /Digitally sign this PDF/ })).toBeVisible()
 })
+
+test('a signed PDF shows an "unchanged" badge with details and its certificate', async ({
+  page,
+}) => {
+  const drawer = await openRecord(page, 'discharge-summary.pdf')
+  await expect(drawer.getByRole('status', { name: 'Signed by patient, unchanged' })).toBeVisible()
+
+  await drawer.getByText('Signature details').click()
+  await expect(drawer.getByText('The whole file')).toBeVisible()
+  const download = page.waitForEvent('download')
+  await drawer.getByRole('button', { name: 'Download certificate (.cer)' }).click()
+  expect((await download).suggestedFilename()).toBe('cipher-safe-patient.cer')
+})
+
+test('a PDF edited after signing shows "Changed after signing"', async ({ page }) => {
+  const drawer = await openRecord(page, 'prescription-edited.pdf')
+  await expect(drawer.getByRole('status', { name: 'Changed after signing' })).toBeVisible()
+  await drawer.getByRole('button', { name: 'Check again' }).click()
+  await expect(drawer.getByRole('status', { name: 'Changed after signing' })).toBeVisible()
+})

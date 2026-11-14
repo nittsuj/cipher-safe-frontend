@@ -11,9 +11,10 @@ test.beforeEach(async ({ page }) => {
 test('a signed-in user has an encryption key with a fingerprint', async ({ page }) => {
   const card = page.getByRole('article', { name: 'Encryption key' })
   await expect(card.getByTestId('fingerprint')).toHaveText(/^([0-9A-F]{4} ){15}[0-9A-F]{4}$/)
-  await expect(page.getByRole('article', { name: 'Signing key' })).toContainText(
-    'No signing key yet',
-  )
+  // The demo patient's signed PDFs come with a signing key.
+  await expect(
+    page.getByRole('article', { name: 'Signing key' }).getByTestId('fingerprint'),
+  ).toHaveText(/^([0-9A-F]{4} ){15}[0-9A-F]{4}$/)
 })
 
 test('making a new key changes the fingerprint after confirming', async ({ page }) => {

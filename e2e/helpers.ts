@@ -4,7 +4,8 @@ import { expect, type Download, type Page } from '@playwright/test'
  * Helpers for the end-to-end tests. They run against the MSW mock API
  * (`pnpm dev:mock`), so no backend is needed. The mock keeps its data in
  * memory and resets on every page load, so each test starts from the seed in
- * `src/mocks/db.ts`: the accounts below plus two lab documents for `patient`.
+ * `src/mocks/db.ts`: the accounts below plus two lab documents and two signed PDFs
+ * (one edited after signing) for `patient`.
  * Navigate with clicks after the first `goto`; a reload wipes the data.
  */
 export const PATIENT = { username: 'patient', password: 'patient-password' }

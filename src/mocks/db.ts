@@ -13,6 +13,7 @@ import type {
   KeyPair,
   KeyPurpose,
   Role,
+  SignatureCheck,
   StoredFile,
 } from '@/types/api'
 import { ALGORITHMS } from '@/types/api'
@@ -39,6 +40,8 @@ export interface MockFile {
   ciphertexts: FileCiphertext[]
   /** When it was "signed". The mock only marks it; the bytes don't change. */
   signedAt: string | null
+  /** Demo only: pretend the PDF was edited after signing, so its check says `modified`. */
+  tampered?: boolean
 }
 
 export interface MockRequest extends Omit<
@@ -219,7 +222,8 @@ export function createKeyPair(userId: number, purpose: KeyPurpose): KeyPair {
     algorithm: 'RSA-3072',
     fingerprint: Array.from(digest, (b) => b.toString(16).padStart(2, '0').toUpperCase()).join(':'),
     public_key_pem: `-----BEGIN PUBLIC KEY-----\n${randomKey()}${randomKey()}\n-----END PUBLIC KEY-----\n`,
-    has_certificate: false,
+    // Signing keys come with a self-signed certificate, like the backend's.
+    has_certificate: purpose === 'SIGNING',
     created_at: now(),
   }
   db.keyPairs.set(keyPairId(userId, purpose), pair)
@@ -283,7 +287,7 @@ export function addGrant(request: MockRequest, file: MockFile | null): MockGrant
     request: request.id,
     kind: file ? 'FILE' : 'PROFILE',
     file: file?.id ?? null,
-    snapshot: file ? null : { ...(db.profiles.get(request.owner)?.fields ?? {}) },
+    snapshot: file ? null : { ...db.profiles.get(request.owner)?.fields },
     envelope: fakeEnvelope(request.id, itemId),
     redeemed: false,
     access_count: 0,
@@ -302,6 +306,42 @@ export function isSignablePdf(contentType: string, data: Uint8Array): boolean {
 export function markSigned(file: MockFile): void {
   if (!activeKeyPair(file.owner, 'SIGNING')) createKeyPair(file.owner, 'SIGNING')
   file.signedAt = now()
+}
+
+/** The mock's version of the backend's signature check. Only signed/tampered
+ * flags decide it; no real cryptography. */
+export function signatureCheck(file: MockFile, signerName: string): SignatureCheck {
+  if (!file.signedAt) {
+    return {
+      status: 'unsigned',
+      signed: false,
+      intact: false,
+      valid: false,
+      signer: null,
+      signer_matches_owner: false,
+      coverage: null,
+      modified_after_signing: false,
+      verify_ms: 1.2,
+    }
+  }
+  const pair = activeKeyPair(file.owner, 'SIGNING')
+  const tampered = file.tampered ?? false
+  return {
+    status: tampered ? 'modified' : 'valid',
+    signed: true,
+    intact: !tampered,
+    valid: !tampered,
+    signer: { common_name: signerName, fingerprint: pair?.fingerprint ?? null },
+    signer_matches_owner: true,
+    coverage: tampered ? 'ENTIRE_REVISION' : 'ENTIRE_FILE',
+    modified_after_signing: tampered,
+    verify_ms: 14.8,
+  }
+}
+
+/** A tiny but real-looking PDF (just the header and a trailer), for the demo records. */
+function demoPdf(title: string): Uint8Array {
+  return new TextEncoder().encode(`%PDF-1.7\n% ${title}\n%%EOF\n`)
 }
 
 // ------------------------------------------------------------------- seed
@@ -353,6 +393,24 @@ function seed() {
       'Puskesmas Kebayoran\nReferral to: RSUD Pasar Minggu, internal medicine\nReason: diabetes follow-up\n',
     ),
   )
+  // Two signed PDFs to show the badge: one unchanged, one edited after signing.
+  const signed = addFile(
+    patient.id,
+    'DOCUMENT',
+    'discharge-summary.pdf',
+    'application/pdf',
+    demoPdf('Discharge summary'),
+  )
+  markSigned(signed)
+  const edited = addFile(
+    patient.id,
+    'DOCUMENT',
+    'prescription-edited.pdf',
+    'application/pdf',
+    demoPdf('Prescription'),
+  )
+  markSigned(edited)
+  edited.tampered = true
 }
 
 seed()

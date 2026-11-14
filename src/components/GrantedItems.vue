@@ -4,9 +4,11 @@ import { reactive, ref } from 'vue'
 import FilePreview from '@/components/FilePreview.vue'
 import ProfileSnapshot from '@/components/ProfileSnapshot.vue'
 import RedeemForm from '@/components/RedeemForm.vue'
+import SignatureBadge from '@/components/SignatureBadge.vue'
+import SignatureDetails from '@/components/SignatureDetails.vue'
 import { requestsApi } from '@/api/cipherSafe'
 import { getErrorMessage } from '@/api/client'
-import type { AccessRequest, GrantedItemSummary } from '@/types/api'
+import type { AccessRequest, GrantedItemSummary, SignatureCheck } from '@/types/api'
 import { categoryLabel } from '@/utils/format'
 
 /** As the requester: what an owner granted, with Enter key and Open per item. */
@@ -48,6 +50,7 @@ async function open(item: GrantedItemSummary) {
         filename: result.filename,
         title: result.filename ?? itemLabel(item),
       })
+      if (result.blob.type === 'application/pdf') void checkSignature(item)
     }
     emit('changed') // the access count went up
   } catch (err) {
@@ -56,6 +59,24 @@ async function open(item: GrantedItemSummary) {
     else errors[item.item_id] = message
   } finally {
     preview.loading = false
+  }
+}
+
+// Signature checks for shared PDFs, against the owner's certificates. Checking
+// doesn't count as opening. The requester can't see a record's type before
+// opening it, so a PDF is checked when opened, or with "Check signature".
+const signatures = reactive<Record<number, SignatureCheck>>({})
+const checking = ref<number | null>(null)
+
+async function checkSignature(item: GrantedItemSummary) {
+  errors[item.item_id] = ''
+  checking.value = item.item_id
+  try {
+    signatures[item.item_id] = await requestsApi.itemSignature(props.request.id, item.item_id)
+  } catch (err) {
+    errors[item.item_id] = getErrorMessage(err, 'Could not check the signature.')
+  } finally {
+    checking.value = null
   }
 }
 
@@ -77,7 +98,17 @@ function redeemed() {
               {{ item.redeemed ? `opened ${item.access_count}×` : 'key not entered yet' }}
             </span>
           </span>
-          <button v-if="item.redeemed" @click="open(item)">Open</button>
+          <span v-if="item.redeemed" class="actions">
+            <button
+              v-if="item.kind === 'FILE'"
+              class="secondary"
+              :disabled="checking === item.item_id"
+              @click="checkSignature(item)"
+            >
+              {{ checking === item.item_id ? 'Checking…' : 'Check signature' }}
+            </button>
+            <button @click="open(item)">Open</button>
+          </span>
           <button
             v-else-if="entering !== item.item_id"
             class="secondary"
@@ -93,6 +124,13 @@ function redeemed() {
           :label="itemLabel(item)"
           @redeemed="redeemed"
         />
+        <div v-if="signatures[item.item_id]" class="signature">
+          <SignatureBadge
+            :status="signatures[item.item_id]!.status"
+            :signer="signatures[item.item_id]!.signer?.common_name"
+          />
+          <SignatureDetails :check="signatures[item.item_id]!" :owner="request.owner" />
+        </div>
         <p v-if="errors[item.item_id]" class="notice error small" role="alert">
           {{ errors[item.item_id] }}
         </p>
@@ -134,5 +172,13 @@ li {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.signature {
+  margin-top: 0.4rem;
 }
 </style>
