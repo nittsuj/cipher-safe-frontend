@@ -5,6 +5,9 @@ export type Role = 'PATIENT' | 'DOCTOR'
 export type Algorithm = (typeof ALGORITHMS)[number]
 export type FileCategory = 'ID_CARD' | 'DOCUMENT' | 'VIDEO'
 
+/** What a key pair is for: receiving shared-record keys, or signing PDFs. */
+export type KeyPurpose = 'ENCRYPTION' | 'SIGNING'
+
 /** Credentials attached to every request. Everything is held in memory only. */
 export interface Credentials {
   access: string | null
@@ -130,4 +133,24 @@ export interface BarRow {
   value: number
   /** Extra values for the tooltip and table view (e.g. min / max). */
   details?: { label: string; value: string }[]
+}
+
+/** One of my RSA key pairs. Only public parts; the private key never leaves the server. */
+export interface KeyPair {
+  purpose: KeyPurpose
+  algorithm: string
+  /** SHA-256 of the public key, `AB:CD:...`. */
+  fingerprint: string
+  public_key_pem: string
+  has_certificate: boolean
+  created_at: string
+}
+
+/** Another user's public key, as anyone signed in may look it up. */
+export interface PublicKey {
+  username: string
+  purpose: KeyPurpose
+  algorithm: string
+  fingerprint: string
+  public_key_pem: string
 }

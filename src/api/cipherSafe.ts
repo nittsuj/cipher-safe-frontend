@@ -8,7 +8,10 @@ import type {
   Role,
   DownloadEvent,
   FileCategory,
+  KeyPair,
+  KeyPurpose,
   PersonalData,
+  PublicKey,
   StoredFile,
   TimingAnalysis,
   User,
@@ -143,5 +146,35 @@ export const sharesApi = {
     return requestBlob(withQuery(`/api/shares/received/${shareId}/open/`, { inline: 1 }), {
       headers: { 'X-Share-Key': key },
     })
+  },
+}
+
+export const keysApi = {
+  /** My active key pairs. */
+  list(): Promise<KeyPair[]> {
+    return requestJson<KeyPair[]>('/api/me/keys/')
+  },
+
+  /** Return my pair for `purpose`, generating it the first time. Needs the password. */
+  ensure(purpose: KeyPurpose): Promise<KeyPair> {
+    return requestJson<KeyPair>('/api/me/keys/', {
+      method: 'POST',
+      json: { purpose, rotate: false },
+    })
+  },
+
+  /** Replace my pair for `purpose` with a new one; the old one keeps working for keys already sent. */
+  rotate(purpose: KeyPurpose): Promise<KeyPair> {
+    return requestJson<KeyPair>('/api/me/keys/', {
+      method: 'POST',
+      json: { purpose, rotate: true },
+    })
+  },
+
+  /** Someone else's public key (404 if they have none yet). */
+  publicKey(username: string, purpose: KeyPurpose = 'ENCRYPTION'): Promise<PublicKey> {
+    return requestJson<PublicKey>(
+      withQuery(`/api/users/${encodeURIComponent(username)}/public-key/`, { purpose }),
+    )
   },
 }
