@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+import AskAccessForm from '@/components/AskAccessForm.vue'
 import RequestRow from '@/components/RequestRow.vue'
 import { useRequestsStore } from '@/stores/requests'
 import type { RequestBox } from '@/types/api'
@@ -29,6 +30,8 @@ onMounted(() => store.load())
         until the owner approves and sends the key.
       </p>
     </header>
+
+    <AskAccessForm @sent="box = 'outgoing'" />
 
     <div class="tabs" role="tablist" aria-label="Requests">
       <button

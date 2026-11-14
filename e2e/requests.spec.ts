@@ -32,3 +32,45 @@ test('the doctor sees the same request under Outgoing', async ({ page }) => {
     page.getByRole('listitem').filter({ hasText: `To ${PATIENT.username}` }),
   ).toContainText('Waiting')
 })
+
+test('a second pending request to the same person is refused', async ({ page }) => {
+  await signIn(page, DOCTOR)
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Requests' })
+    .click()
+  await page.getByLabel('Their username').fill(PATIENT.username)
+  await page.getByRole('button', { name: 'Send request' }).click()
+  // The seeded request is still pending, so the server refuses a second one.
+  await expect(page.getByRole('alert')).toContainText('already have a pending request')
+})
+
+test('a patient asks the doctor for access', async ({ page }) => {
+  await signIn(page, PATIENT)
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: /Requests/ })
+    .click()
+  await page.getByLabel('Their username').fill(DOCTOR.username)
+  await page.getByLabel(/What do you need/).selectOption('PROFILE')
+  await page.getByLabel(/Message/).fill('Your referral letter, please.')
+  await expect(page.getByText('471 characters left')).toBeVisible()
+  await page.getByRole('button', { name: 'Send request' }).click()
+
+  await expect(page.getByRole('status')).toContainText(`Request sent to ${DOCTOR.username}`)
+  await expect(page.getByRole('tab', { name: /Outgoing/ })).toHaveAttribute('aria-selected', 'true')
+  const row = page.getByRole('listitem').filter({ hasText: `To ${DOCTOR.username}` })
+  await expect(row).toContainText('Waiting')
+  await expect(row).toContainText('Asks for: Profile')
+})
+
+test('asking an unknown user shows the server error', async ({ page }) => {
+  await signIn(page, PATIENT)
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: /Requests/ })
+    .click()
+  await page.getByLabel('Their username').fill('nobody')
+  await page.getByRole('button', { name: 'Send request' }).click()
+  await expect(page.getByRole('alert')).toContainText('No user with that username')
+})
