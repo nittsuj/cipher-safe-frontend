@@ -6,6 +6,7 @@ import { getErrorMessage } from '@/api/client'
 
 import ApproveDialog from '@/components/ApproveDialog.vue'
 import AskAccessForm from '@/components/AskAccessForm.vue'
+import GrantedItems from '@/components/GrantedItems.vue'
 import RequestRow from '@/components/RequestRow.vue'
 import { useRequestsStore } from '@/stores/requests'
 import type { AccessRequest, RequestBox } from '@/types/api'
@@ -121,6 +122,16 @@ onMounted(() => store.load())
               Cancel request
             </button>
           </template>
+          <GrantedItems
+            v-if="
+              box === 'outgoing' &&
+              request.status === 'APPROVED' &&
+              !request.expired &&
+              request.items.length
+            "
+            :request="request"
+            @changed="store.load()"
+          />
           <p v-if="rowErrors[request.id]" class="notice error small" role="alert">
             {{ rowErrors[request.id] }}
           </p>
