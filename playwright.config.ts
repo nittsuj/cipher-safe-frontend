@@ -34,7 +34,7 @@ export default defineConfig({
     /* Maximum time each action such as `click()` can take. Defaults to 0 (no limit). */
     actionTimeout: 0,
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.CI ? 'http://localhost:4173' : 'http://localhost:5173',
+    baseURL: 'http://localhost:5174',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -99,12 +99,12 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     /**
-     * Use the dev server by default for faster feedback loop.
-     * Use the preview server on CI for more realistic testing.
-     * Playwright will re-use the local server if there is already a dev-server running.
+     * The tests run against the in-browser MSW mock API (src/mocks), so no
+     * backend is needed. The mock only exists in the dev server, so CI uses it
+     * too. Port 5174 keeps it apart from a normal `pnpm dev` on 5173.
      */
-    command: process.env.CI ? 'pnpm run preview' : 'pnpm run dev',
-    port: process.env.CI ? 4173 : 5173,
+    command: 'pnpm run dev:mock --port 5174 --strictPort',
+    port: 5174,
     reuseExistingServer: !process.env.CI,
   },
 })

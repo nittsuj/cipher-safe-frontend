@@ -63,9 +63,7 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # With CI set, Playwright serves the production build (`pnpm run preview`).
-      - run: pnpm build-only
-
+      # Playwright starts the dev server with the MSW mock API (`pnpm dev:mock`).
       - name: Run Playwright
         run: pnpm exec playwright test --project=chromium
 
