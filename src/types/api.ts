@@ -57,6 +57,28 @@ export interface StoredFile {
   signed_at: string | null
 }
 
+/** What checking a PDF's signature found (see `SignatureCheck`). */
+export type SignatureStatus = 'valid' | 'modified' | 'unknown_signer' | 'invalid' | 'unsigned'
+
+/** The backend's verdict on a PDF's embedded Cipher Safe signature. */
+export interface SignatureCheck {
+  status: SignatureStatus
+  signed: boolean
+  /** The signed bytes hash to what the signature covers. */
+  intact: boolean
+  /** The signature is cryptographically sound and chains to a trusted certificate. */
+  valid: boolean
+  signer: { common_name: string | null; fingerprint: string | null } | null
+  /** Made with one of the owner's signing certificates (rotated ones included). */
+  signer_matches_owner: boolean
+  /** pyHanko's coverage level, e.g. `ENTIRE_FILE`. */
+  coverage: string | null
+  modified_after_signing: boolean
+  verify_ms: number
+  /** When Cipher Safe signed it; only for my own records. */
+  signed_at?: string | null
+}
+
 export interface PersonalData {
   algorithm?: Algorithm
   updated_at: string

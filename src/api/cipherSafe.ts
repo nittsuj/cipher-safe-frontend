@@ -6,6 +6,7 @@ import type {
   AuthResponse,
   BenchmarkResult,
   RequestBox,
+  SignatureCheck,
   Role,
   DownloadEvent,
   EnvelopeAgain,
@@ -95,6 +96,11 @@ export const filesApi = {
     return requestJson<StoredFile>(`/api/files/${id}/sign/`, { method: 'POST' })
   },
 
+  /** Check a stored PDF's signature against my certificates (400 for non-PDFs). */
+  signature(id: number): Promise<SignatureCheck> {
+    return requestJson<SignatureCheck>(`/api/files/${id}/signature/`)
+  },
+
   remove(id: number): Promise<void> {
     return requestJson<void>(`/api/files/${id}/`, { method: 'DELETE' })
   },
@@ -164,6 +170,16 @@ export const keysApi = {
       withQuery(`/api/users/${encodeURIComponent(username)}/public-key/`, { purpose }),
     )
   },
+
+  /** My signing certificate as a `.cer` (DER), to trust in a PDF reader. 404 without one. */
+  certificate(): Promise<{ blob: Blob; filename: string | null }> {
+    return requestBlob('/api/me/keys/certificate/')
+  },
+
+  /** Someone's current signing certificate as a `.cer`. 404 if they have none. */
+  userCertificate(username: string): Promise<{ blob: Blob; filename: string | null }> {
+    return requestBlob(`/api/users/${encodeURIComponent(username)}/certificate/`)
+  },
 }
 
 export const requestsApi = {
@@ -216,6 +232,11 @@ export const requestsApi = {
   /** As the requester: a redeemed profile snapshot. */
   openProfile(id: number, itemId: number): Promise<Record<string, string>> {
     return requestJson<Record<string, string>>(`/api/access-requests/${id}/items/${itemId}/`)
+  },
+
+  /** As the requester: check a shared PDF's signature against the owner's certificates. */
+  itemSignature(id: number, itemId: number): Promise<SignatureCheck> {
+    return requestJson<SignatureCheck>(`/api/access-requests/${id}/items/${itemId}/signature/`)
   },
 
   /** As the owner: end approved access; every shared copy and key is deleted. */
