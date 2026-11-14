@@ -52,3 +52,12 @@ export function formatUntil(iso: string): string {
 export function categoryLabel(value: string): string {
   return FILE_CATEGORIES.find((c) => c.value === value)?.label ?? value
 }
+
+/**
+ * Show a key fingerprint (`AB:CD:EF:...`) as uppercase groups of four hex
+ * characters, `ABCD EF01 ...`, which is easier to read out and compare.
+ */
+export function formatFingerprint(fingerprint: string): string {
+  const hex = fingerprint.replace(/[^0-9a-f]/gi, '').toUpperCase()
+  return hex.match(/.{1,4}/g)?.join(' ') ?? ''
+}

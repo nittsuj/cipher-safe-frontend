@@ -1,17 +1,30 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import { useRequestsStore } from '@/stores/requests'
 
 const auth = useAuthStore()
 const router = useRouter()
+const requests = useRequestsStore()
+
+// Load requests once signed in, so the nav badge shows pending incoming ones.
+watch(
+  () => auth.isAuthenticated,
+  (signedIn) => (signedIn ? requests.load() : requests.clear()),
+  { immediate: true },
+)
 
 const links = computed(() =>
   auth.isDoctor
-    ? [{ to: '/shared', label: 'Shared with me' }]
+    ? [
+        { to: '/shared', label: 'Shared with me' },
+        { to: '/requests', label: 'Requests' },
+      ]
     : [
         { to: '/files', label: 'Records' },
+        { to: '/requests', label: 'Requests' },
         { to: '/personal-data', label: 'Profile' },
         { to: '/analysis', label: 'Cipher analysis' },
       ],
@@ -37,7 +50,15 @@ async function handleLogout() {
       </RouterLink>
 
       <nav v-if="auth.isAuthenticated" class="nav" aria-label="Main">
-        <RouterLink v-for="link in links" :key="link.to" :to="link.to">{{ link.label }}</RouterLink>
+        <RouterLink v-for="link in links" :key="link.to" :to="link.to">
+          {{ link.label }}
+          <span
+            v-if="link.to === '/requests' && requests.pendingIncoming"
+            class="nav-badge"
+            :aria-label="`${requests.pendingIncoming} waiting for you`"
+            >{{ requests.pendingIncoming }}</span
+          >
+        </RouterLink>
       </nav>
 
       <div v-if="auth.isAuthenticated" class="session">
@@ -125,6 +146,18 @@ async function handleLogout() {
   font-weight: 600;
   padding: 0.5rem 0.8rem;
   border-radius: var(--radius-control);
+}
+
+.nav-badge {
+  display: inline-block;
+  min-width: 1.3rem;
+  margin-left: 0.3rem;
+  padding: 0 0.35rem;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--accent-ink);
+  background: var(--accent);
 }
 
 .nav a:hover {

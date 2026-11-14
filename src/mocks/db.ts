@@ -5,10 +5,13 @@
  * timings are synthetic. State lives in memory and resets on page reload.
  */
 import type {
+  AccessRequest,
   Algorithm,
   DownloadEvent,
   FileCategory,
   FileCiphertext,
+  KeyPair,
+  KeyPurpose,
   Role,
   StoredFile,
 } from '@/types/api'
@@ -48,6 +51,28 @@ export interface MockShare {
   last_accessed_at: string | null
 }
 
+export interface MockRequest extends Omit<
+  AccessRequest,
+  'requester' | 'owner' | 'expired' | 'items'
+> {
+  requester: number
+  owner: number
+}
+
+export interface MockGrant {
+  id: number
+  request: number
+  kind: 'FILE' | 'PROFILE'
+  /** The record id for a FILE item. */
+  file: number | null
+  /** Profile fields at approval time, for a PROFILE item. */
+  snapshot: Record<string, string> | null
+  /** What the owner sends. In the real API it holds the item key encrypted for the requester. */
+  envelope: string
+  redeemed: boolean
+  access_count: number
+}
+
 export interface MockProfile {
   fields: Record<string, string>
   updated_at: string
@@ -62,6 +87,12 @@ export const db = {
   files: [] as MockFile[],
   shares: [] as MockShare[],
   downloads: [] as (DownloadEvent & { owner: number })[],
+  /** Active key pair per user and purpose; rotated pairs are dropped (no data uses them here). */
+  keyPairs: new Map<string, KeyPair>(),
+  /** Access requests, newest first. `requester` / `owner` are user ids. */
+  requests: [] as MockRequest[],
+  /** Items granted on approved requests. */
+  grants: [] as MockGrant[],
   profiles: new Map<number, MockProfile>(),
   /** access/refresh token -> user id */
   tokens: new Map<string, number>(),
@@ -202,6 +233,93 @@ export function shareIsActive(share: MockShare): boolean {
   return !share.revoked && new Date(share.expires_at) > new Date()
 }
 
+const keyPairId = (userId: number, purpose: KeyPurpose) => `${userId}:${purpose}`
+
+export function activeKeyPair(userId: number, purpose: KeyPurpose): KeyPair | undefined {
+  return db.keyPairs.get(keyPairId(userId, purpose))
+}
+
+/** A fake RSA-3072 pair: random fingerprint and a placeholder PEM. No real keys. */
+export function createKeyPair(userId: number, purpose: KeyPurpose): KeyPair {
+  const digest = crypto.getRandomValues(new Uint8Array(32))
+  const pair: KeyPair = {
+    purpose,
+    algorithm: 'RSA-3072',
+    fingerprint: Array.from(digest, (b) => b.toString(16).padStart(2, '0').toUpperCase()).join(':'),
+    public_key_pem: `-----BEGIN PUBLIC KEY-----\n${randomKey()}${randomKey()}\n-----END PUBLIC KEY-----\n`,
+    has_certificate: false,
+    created_at: now(),
+  }
+  db.keyPairs.set(keyPairId(userId, purpose), pair)
+  return pair
+}
+
+export function addRequest(
+  requester: MockUser,
+  owner: MockUser,
+  message: string,
+  category: MockRequest['category'],
+): MockRequest {
+  const request: MockRequest = {
+    id: id(),
+    requester: requester.id,
+    owner: owner.id,
+    message,
+    category,
+    status: 'PENDING',
+    created_at: now(),
+    decided_at: null,
+    expires_at: null,
+  }
+  db.requests.unshift(request)
+  return request
+}
+
+export function serializeRequest(request: MockRequest): AccessRequest {
+  const name = (userId: number) => db.users.find((u) => u.id === userId)?.username ?? '?'
+  return {
+    ...request,
+    requester: name(request.requester),
+    owner: name(request.owner),
+    expired: request.expires_at !== null && new Date(request.expires_at) <= new Date(),
+    items: db.grants
+      .filter((g) => g.request === request.id)
+      .map((g) => ({
+        item_id: g.id,
+        kind: g.kind,
+        category: db.files.find((f) => f.id === g.file)?.category ?? null,
+        redeemed: g.redeemed,
+        access_count: g.access_count,
+      })),
+  }
+}
+
+/** A fake envelope: same `CSK1.<request>.<item>.<key>` shape and length as the real one. */
+function fakeEnvelope(requestId: number, itemId: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(384)) // an RSA-3072 ciphertext's size
+  const key = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+  return `CSK1.${requestId}.${itemId}.${key}`
+}
+
+export function addGrant(request: MockRequest, file: MockFile | null): MockGrant {
+  const itemId = id()
+  const grant: MockGrant = {
+    id: itemId,
+    request: request.id,
+    kind: file ? 'FILE' : 'PROFILE',
+    file: file?.id ?? null,
+    snapshot: file ? null : { ...(db.profiles.get(request.owner)?.fields ?? {}) },
+    envelope: fakeEnvelope(request.id, itemId),
+    redeemed: false,
+    access_count: 0,
+  }
+  db.grants.push(grant)
+  return grant
+}
+
 // ------------------------------------------------------------------- seed
 
 export const DEMO_PATIENT = { username: 'patient', password: 'patient-password' }
@@ -209,7 +327,11 @@ export const DEMO_DOCTOR = { username: 'doctor', password: 'doctor-password' }
 
 function seed() {
   const patient = createUser(DEMO_PATIENT.username, DEMO_PATIENT.password, 'PATIENT')
-  createUser(DEMO_DOCTOR.username, DEMO_DOCTOR.password, 'DOCTOR')
+  const doctor = createUser(DEMO_DOCTOR.username, DEMO_DOCTOR.password, 'DOCTOR')
+  // The demo doctor already has an encryption key, like after a first sign-in.
+  createKeyPair(doctor.id, 'ENCRYPTION')
+  // An incoming request waiting for the demo patient, so the Requests page isn't empty.
+  addRequest(doctor, patient, 'Your latest lab results, for the check-up on Monday.', 'DOCUMENT')
 
   db.profiles.set(patient.id, {
     updated_at: now(),

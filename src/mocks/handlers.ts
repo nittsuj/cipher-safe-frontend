@@ -12,12 +12,24 @@ import {
   type StrictRequest,
 } from 'msw'
 
-import type { Algorithm, FileCategory, FileShare, ReceivedShare, Role } from '@/types/api'
+import type {
+  Algorithm,
+  FileCategory,
+  FileShare,
+  KeyPurpose,
+  ReceivedShare,
+  Role,
+} from '@/types/api'
 import { FILE_CATEGORIES, PREVIEWABLE_TYPES } from '@/config/records'
+import { REQUEST_CATEGORIES } from '@/config/requests'
 import { ALGORITHMS } from '@/types/api'
 import {
+  activeKeyPair,
+  addRequest,
   addFile,
+  addGrant,
   addShare,
+  createKeyPair,
   createUser,
   db,
   fakeTimings,
@@ -26,7 +38,10 @@ import {
   MODE_FOR,
   scramble,
   serializeFile,
+  serializeRequest,
   shareIsActive,
+  type MockGrant,
+  type MockRequest,
   type MockShare,
   type MockUser,
 } from './db'
@@ -152,6 +167,42 @@ function stats(values: number[]) {
   }
 }
 
+/** A request the user takes part in; anyone else gets 404, like the backend. */
+function requestFor(user: MockUser, id: string | readonly string[] | undefined): MockRequest {
+  const request = db.requests.find(
+    (r) => r.id === Number(id) && (r.requester === user.id || r.owner === user.id),
+  )
+  if (!request) throw detail(404, 'No AccessRequest matches the given query.')
+  return request
+}
+
+/** A request where the user is the owner: outsiders 404, the requester 403. */
+function ownedRequest(user: MockUser, id: string | readonly string[] | undefined): MockRequest {
+  const request = requestFor(user, id)
+  if (request.owner !== user.id) throw detail(403, 'Only the owner can do this.')
+  return request
+}
+
+/** An item of an approved, unexpired request; 404 otherwise, like the backend. */
+function liveGrant(
+  request: MockRequest,
+  itemId: string | readonly string[] | undefined,
+): MockGrant {
+  const ended = request.expires_at !== null && new Date(request.expires_at) <= new Date()
+  if (request.status !== 'APPROVED' || ended) throw detail(404, 'This access has ended.')
+  const grant = db.grants.find((g) => g.id === Number(itemId) && g.request === request.id)
+  if (!grant) throw detail(404, 'Not found.')
+  return grant
+}
+
+/** Same rule as the backend: only a pending request can be decided. */
+function decide(request: MockRequest, status: MockRequest['status']) {
+  if (request.status !== 'PENDING')
+    throw detail(409, `This request is already ${request.status.toLowerCase()}.`)
+  request.status = status
+  request.decided_at = new Date().toISOString()
+}
+
 // ---------------------------------------------------------------- handlers
 
 export const handlers = [
@@ -216,6 +267,242 @@ export const handlers = [
     api('/me/'),
     guard(({ request }) => {
       return HttpResponse.json(publicUser(currentUser(request)))
+    }),
+  ),
+
+  // ----- key pairs (any role)
+  http.get(
+    api('/me/keys/'),
+    guard(({ request }) => {
+      const user = currentUser(request)
+      const purposes: KeyPurpose[] = ['ENCRYPTION', 'SIGNING']
+      return HttpResponse.json(purposes.flatMap((p) => activeKeyPair(user.id, p) ?? []))
+    }),
+  ),
+
+  http.post(
+    api('/me/keys/'),
+    guard(async ({ request }) => {
+      const user = currentUser(request)
+      requirePassword(request, user)
+      const body = (await request.json()) as { purpose?: string; rotate?: boolean }
+      if (body.purpose !== 'ENCRYPTION' && body.purpose !== 'SIGNING')
+        throw new HttpError(400, { purpose: [`"${body.purpose}" is not a valid choice.`] })
+      const existing = activeKeyPair(user.id, body.purpose)
+      if (existing && !body.rotate) return HttpResponse.json(existing)
+      await delay(400) // RSA-3072 generation takes a moment
+      return HttpResponse.json(createKeyPair(user.id, body.purpose), { status: 201 })
+    }),
+  ),
+
+  http.get(
+    api('/users/:username/public-key/'),
+    guard(({ request, params }) => {
+      currentUser(request)
+      const purpose = (
+        new URL(request.url).searchParams.get('purpose') ?? 'ENCRYPTION'
+      ).toUpperCase()
+      if (purpose !== 'ENCRYPTION' && purpose !== 'SIGNING')
+        throw new HttpError(400, { purpose: 'Must be one of ENCRYPTION, SIGNING.' })
+      const owner = db.users.find((u) => u.username === params.username)
+      const pair = owner && activeKeyPair(owner.id, purpose)
+      if (!owner || !pair) throw detail(404, 'Not found.')
+      const { algorithm, fingerprint, public_key_pem } = pair
+      return HttpResponse.json({
+        username: owner.username,
+        purpose,
+        algorithm,
+        fingerprint,
+        public_key_pem,
+      })
+    }),
+  ),
+
+  // ----- access requests (any role)
+  http.get(
+    api('/access-requests/'),
+    guard(({ request }) => {
+      const user = currentUser(request)
+      const box = (new URL(request.url).searchParams.get('box') ?? 'incoming').toLowerCase()
+      if (box !== 'incoming' && box !== 'outgoing')
+        throw new HttpError(400, { box: 'Must be incoming or outgoing.' })
+      const mine = db.requests.filter((r) =>
+        box === 'incoming' ? r.owner === user.id : r.requester === user.id,
+      )
+      return HttpResponse.json(mine.map(serializeRequest))
+    }),
+  ),
+
+  http.post(
+    api('/access-requests/'),
+    guard(async ({ request }) => {
+      const user = currentUser(request)
+      const body = (await request.json()) as { owner?: string; message?: string; category?: string }
+      const owner = db.users.find((u) => u.username === body.owner?.trim())
+      if (!owner) throw new HttpError(400, { owner: ['No user with that username.'] })
+      if (owner.id === user.id)
+        throw new HttpError(400, { owner: ["You can't request your own data."] })
+      const category = body.category ?? ''
+      if (category && !REQUEST_CATEGORIES.some((c) => c.value === category))
+        throw new HttpError(400, { category: [`"${category}" is not a valid choice.`] })
+      if ((body.message ?? '').length > 500)
+        throw new HttpError(400, {
+          message: ['Ensure this field has no more than 500 characters.'],
+        })
+      const pending = db.requests.some(
+        (r) => r.requester === user.id && r.owner === owner.id && r.status === 'PENDING',
+      )
+      if (pending)
+        throw new HttpError(400, { owner: ['You already have a pending request to this user.'] })
+      const created = addRequest(
+        user,
+        owner,
+        body.message ?? '',
+        category as MockRequest['category'],
+      )
+      return HttpResponse.json(serializeRequest(created), { status: 201 })
+    }),
+  ),
+
+  http.post(
+    api('/access-requests/:id/deny/'),
+    guard(({ request, params }) => {
+      const user = currentUser(request)
+      const accessRequest = requestFor(user, params.id)
+      if (accessRequest.owner !== user.id) throw detail(403, 'Only the owner can deny a request.')
+      decide(accessRequest, 'DENIED')
+      return HttpResponse.json(serializeRequest(accessRequest))
+    }),
+  ),
+
+  http.delete(
+    api('/access-requests/:id/'),
+    guard(({ request, params }) => {
+      const user = currentUser(request)
+      const accessRequest = requestFor(user, params.id)
+      if (accessRequest.requester === user.id) decide(accessRequest, 'CANCELLED')
+      else if (accessRequest.status === 'PENDING')
+        throw detail(403, 'Only the requester can cancel a request; deny it instead.')
+      else if (accessRequest.status !== 'APPROVED')
+        throw detail(409, `This request is already ${accessRequest.status.toLowerCase()}.`)
+      else {
+        // Revoke: every shared copy and key goes.
+        db.grants = db.grants.filter((g) => g.request !== accessRequest.id)
+        accessRequest.status = 'REVOKED'
+        accessRequest.decided_at = new Date().toISOString()
+      }
+      return new HttpResponse(null, { status: 204 })
+    }),
+  ),
+
+  // ----- approving, redeeming and opening granted items
+  http.post(
+    api('/access-requests/:id/approve/'),
+    guard(async ({ request, params }) => {
+      const user = currentUser(request)
+      requirePassword(request, user)
+      const accessRequest = ownedRequest(user, params.id)
+      const body = (await request.json()) as {
+        file_ids?: number[]
+        include_profile?: boolean
+        expires_hours?: number
+      }
+      const ids = body.file_ids ?? []
+      const files = db.files.filter((f) => f.owner === user.id && ids.includes(f.id))
+      if (new Set(ids).size !== ids.length)
+        throw new HttpError(400, { file_ids: ['A record is listed twice.'] })
+      if (files.length !== ids.length)
+        throw new HttpError(400, { file_ids: ['Every record must be one of yours.'] })
+      if (!ids.length && !body.include_profile)
+        throw new HttpError(400, {
+          non_field_errors: ['Choose at least one record or the profile.'],
+        })
+      const hours = body.expires_hours ?? 24
+      if (!Number.isInteger(hours) || hours < 1 || hours > 168)
+        throw new HttpError(400, { expires_hours: ['Ensure this value is between 1 and 168.'] })
+      const requester = db.users.find((u) => u.id === accessRequest.requester)!
+      const requesterKey = activeKeyPair(requester.id, 'ENCRYPTION')
+      if (!requesterKey)
+        throw detail(
+          409,
+          `${requester.username} has no encryption key yet. Ask them to open Cipher Safe once.`,
+        )
+      if (accessRequest.status !== 'PENDING')
+        throw detail(409, `This request is already ${accessRequest.status.toLowerCase()}.`)
+
+      await delay(300) // decrypting, re-encrypting and wrapping keys takes a moment
+      const grants = [...files, ...(body.include_profile ? [null] : [])].map((file) =>
+        addGrant(accessRequest, file),
+      )
+      const now = new Date()
+      accessRequest.status = 'APPROVED'
+      accessRequest.decided_at = now.toISOString()
+      accessRequest.expires_at = new Date(now.getTime() + hours * 3_600_000).toISOString()
+      return HttpResponse.json({
+        request: serializeRequest(accessRequest),
+        recipient_fingerprint: requesterKey.fingerprint,
+        items: grants.map((g) => ({
+          item_id: g.id,
+          kind: g.kind,
+          file_id: g.file,
+          category: db.files.find((f) => f.id === g.file)?.category ?? null,
+          envelope: g.envelope,
+        })),
+      })
+    }),
+  ),
+
+  http.get(
+    api('/access-requests/:id/items/:itemId/envelope/'),
+    guard(({ request, params }) => {
+      const user = currentUser(request)
+      requirePassword(request, user)
+      const grant = liveGrant(ownedRequest(user, params.id), params.itemId)
+      const requester = db.requests.find((r) => r.id === grant.request)!.requester
+      return HttpResponse.json({
+        item_id: grant.id,
+        kind: grant.kind,
+        envelope: grant.envelope,
+        recipient_fingerprint: activeKeyPair(requester, 'ENCRYPTION')?.fingerprint ?? '',
+      })
+    }),
+  ),
+
+  http.post(
+    api('/access-requests/:id/items/:itemId/redeem/'),
+    guard(async ({ request, params }) => {
+      const user = currentUser(request)
+      requirePassword(request, user)
+      const accessRequest = requestFor(user, params.id)
+      if (accessRequest.requester !== user.id) throw detail(403, 'Only the requester can do this.')
+      const grant = liveGrant(accessRequest, params.itemId)
+      const { envelope = '' } = (await request.json()) as { envelope?: string }
+      const compact = envelope.replace(/\s+/g, '')
+      const parts = compact.split('.')
+      if (parts.length !== 4 || parts[0] !== 'CSK1')
+        throw new HttpError(400, { envelope: ["This doesn't look like a Cipher Safe key."] })
+      if (Number(parts[1]) !== accessRequest.id || Number(parts[2]) !== grant.id)
+        throw new HttpError(400, { envelope: ['This key belongs to another item.'] })
+      if (compact !== grant.envelope) throw detail(403, 'This key is not for this item.')
+      grant.redeemed = true
+      return HttpResponse.json({ item_id: grant.id, kind: grant.kind, redeemed: true })
+    }),
+  ),
+
+  http.get(
+    api('/access-requests/:id/items/:itemId/'),
+    guard(({ request, params }) => {
+      const user = currentUser(request)
+      requirePassword(request, user)
+      const accessRequest = requestFor(user, params.id)
+      if (accessRequest.requester !== user.id) throw detail(403, 'Only the requester can do this.')
+      const grant = liveGrant(accessRequest, params.itemId)
+      if (!grant.redeemed) throw detail(403, 'Enter the key the owner sent you first.')
+      grant.access_count += 1
+      if (grant.kind === 'PROFILE') return HttpResponse.json(grant.snapshot ?? {})
+      const file = db.files.find((f) => f.id === grant.file)
+      if (!file) throw detail(404, 'Not found.')
+      return fileResponse(file.data, file.contentType, file.name, wantsInline(request))
     }),
   ),
 

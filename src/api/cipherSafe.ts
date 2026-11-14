@@ -1,14 +1,23 @@
 import type {
+  AccessRequest,
+  ApproveRequestBody,
+  ApproveResult,
   Algorithm,
   AuthResponse,
   BenchmarkResult,
   CreatedShare,
   FileShare,
   ReceivedShare,
+  RequestBox,
   Role,
   DownloadEvent,
+  EnvelopeAgain,
   FileCategory,
+  KeyPair,
+  KeyPurpose,
+  NewAccessRequest,
   PersonalData,
+  PublicKey,
   StoredFile,
   TimingAnalysis,
   User,
@@ -143,5 +152,93 @@ export const sharesApi = {
     return requestBlob(withQuery(`/api/shares/received/${shareId}/open/`, { inline: 1 }), {
       headers: { 'X-Share-Key': key },
     })
+  },
+}
+
+export const keysApi = {
+  /** My active key pairs. */
+  list(): Promise<KeyPair[]> {
+    return requestJson<KeyPair[]>('/api/me/keys/')
+  },
+
+  /** Return my pair for `purpose`, generating it the first time. Needs the password. */
+  ensure(purpose: KeyPurpose): Promise<KeyPair> {
+    return requestJson<KeyPair>('/api/me/keys/', {
+      method: 'POST',
+      json: { purpose, rotate: false },
+    })
+  },
+
+  /** Replace my pair for `purpose` with a new one; the old one keeps working for keys already sent. */
+  rotate(purpose: KeyPurpose): Promise<KeyPair> {
+    return requestJson<KeyPair>('/api/me/keys/', {
+      method: 'POST',
+      json: { purpose, rotate: true },
+    })
+  },
+
+  /** Someone else's public key (404 if they have none yet). */
+  publicKey(username: string, purpose: KeyPurpose = 'ENCRYPTION'): Promise<PublicKey> {
+    return requestJson<PublicKey>(
+      withQuery(`/api/users/${encodeURIComponent(username)}/public-key/`, { purpose }),
+    )
+  },
+}
+
+export const requestsApi = {
+  /** Ask a user for their data. No password needed: nothing is decrypted. */
+  create(request: NewAccessRequest): Promise<AccessRequest> {
+    return requestJson<AccessRequest>('/api/access-requests/', { method: 'POST', json: request })
+  },
+
+  /** Requests to me (`incoming`) or from me (`outgoing`), newest first. */
+  list(box: RequestBox): Promise<AccessRequest[]> {
+    return requestJson<AccessRequest[]>(withQuery('/api/access-requests/', { box }))
+  },
+
+  /** As the owner: refuse a pending request. */
+  deny(id: number): Promise<AccessRequest> {
+    return requestJson<AccessRequest>(`/api/access-requests/${id}/deny/`, { method: 'POST' })
+  },
+
+  /** As the requester: withdraw a pending request. */
+  cancel(id: number): Promise<void> {
+    return requestJson<void>(`/api/access-requests/${id}/`, { method: 'DELETE' })
+  },
+
+  /** As the owner: grant records and/or the profile. Returns one envelope per item. */
+  approve(id: number, body: ApproveRequestBody): Promise<ApproveResult> {
+    return requestJson<ApproveResult>(`/api/access-requests/${id}/approve/`, {
+      method: 'POST',
+      json: body,
+    })
+  },
+
+  /** As the owner: the same envelope again, to resend it. */
+  envelope(id: number, itemId: number): Promise<EnvelopeAgain> {
+    return requestJson<EnvelopeAgain>(`/api/access-requests/${id}/items/${itemId}/envelope/`)
+  },
+
+  /** As the requester: enter the envelope the owner sent. */
+  redeem(id: number, itemId: number, envelope: string): Promise<void> {
+    return requestJson<void>(`/api/access-requests/${id}/items/${itemId}/redeem/`, {
+      method: 'POST',
+      json: { envelope },
+    })
+  },
+
+  /** As the requester: a redeemed record, for preview. */
+  openFile(id: number, itemId: number): Promise<{ blob: Blob; filename: string | null }> {
+    return requestBlob(withQuery(`/api/access-requests/${id}/items/${itemId}/`, { inline: 1 }))
+  },
+
+  /** As the requester: a redeemed profile snapshot. */
+  openProfile(id: number, itemId: number): Promise<Record<string, string>> {
+    return requestJson<Record<string, string>>(`/api/access-requests/${id}/items/${itemId}/`)
+  },
+
+  /** As the owner: end approved access; every shared copy and key is deleted. */
+  revoke(id: number): Promise<void> {
+    return requestJson<void>(`/api/access-requests/${id}/`, { method: 'DELETE' })
   },
 }

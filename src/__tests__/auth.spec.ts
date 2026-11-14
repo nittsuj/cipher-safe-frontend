@@ -103,3 +103,62 @@ describe('auth store', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('encryption key on sign-in', () => {
+  const loginBody = {
+    user: { id: 1, username: 'alice', role: 'PATIENT', date_joined: '2026-01-01T00:00:00Z' },
+    access: 'acc-123',
+    refresh: 'ref-123',
+  }
+
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function stubFetch(keyResponse: () => Response) {
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
+      String(url).includes('/api/me/keys/') ? keyResponse() : jsonResponse(loginBody),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const keyCalls = () =>
+      fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/me/keys/'))
+    return keyCalls
+  }
+
+  it('asks for the encryption key once after login, with the password', async () => {
+    const keyCalls = stubFetch(() => jsonResponse({ purpose: 'ENCRYPTION' }, 201))
+    const auth = useAuthStore()
+    await auth.login('alice', 'SuperSecret123!')
+    await auth.ensureEncryptionKey()
+    await auth.ensureEncryptionKey()
+
+    expect(keyCalls()).toHaveLength(1)
+    const [, init] = keyCalls()[0]!
+    expect(JSON.parse(String(init?.body))).toEqual({ purpose: 'ENCRYPTION', rotate: false })
+    expect((init?.headers as Record<string, string>)['X-Cipher-Password']).toBe('SuperSecret123!')
+    vi.unstubAllGlobals()
+  })
+
+  it('checks again after signing out and back in', async () => {
+    const keyCalls = stubFetch(() => jsonResponse({ purpose: 'ENCRYPTION' }))
+    const auth = useAuthStore()
+    await auth.login('alice', 'SuperSecret123!')
+    await auth.ensureEncryptionKey()
+    auth.clear()
+    await auth.login('alice', 'SuperSecret123!')
+    await auth.ensureEncryptionKey()
+
+    expect(keyCalls()).toHaveLength(2)
+    vi.unstubAllGlobals()
+  })
+
+  it('does not fail the login when the key call fails, and retries later', async () => {
+    const keyCalls = stubFetch(() => jsonResponse({ detail: 'Server error' }, 500))
+    const auth = useAuthStore()
+    await auth.login('alice', 'SuperSecret123!')
+    await auth.ensureEncryptionKey()
+
+    expect(auth.isAuthenticated).toBe(true)
+    await auth.ensureEncryptionKey()
+    expect(keyCalls()).toHaveLength(2)
+    vi.unstubAllGlobals()
+  })
+})
