@@ -45,6 +45,12 @@ export const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, role: 'PATIENT' },
   },
   {
+    path: '/requests',
+    name: 'requests',
+    component: () => import('@/views/RequestsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/shared',
     name: 'shared',
     component: () => import('@/views/SharedView.vue'),
